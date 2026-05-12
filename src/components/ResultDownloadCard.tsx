@@ -26,6 +26,13 @@ export function ResultDownloadCard({
 
   const canZip = readme && techSpec && pptxBase64;
 
+  /** 서버가 pdfNote를 안 주는(구 API·캐시) 경우에도 PDF 비활성 이유를 보이게 함 */
+  const pdfUnavailableHint =
+    pdfNote ||
+    (!pdfAvailable && !pdfError
+      ? 'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev`)·Docker로 실행하거나, 환경 변수 ENABLE_PDF_ON_VERCEL을 확인하세요.'
+      : null);
+
   async function onZip() {
     if (!canZip) return;
     setZipLoading(true);
@@ -52,9 +59,9 @@ export function ResultDownloadCard({
           {pdfError}
         </p>
       )}
-      {!pdfError && pdfNote && (
+      {!pdfError && pdfUnavailableHint && (
         <p className="rounded-xl border border-slate-600/50 bg-slate-900/70 px-4 py-3 text-sm leading-relaxed text-slate-300">
-          {pdfNote}
+          {pdfUnavailableHint}
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
