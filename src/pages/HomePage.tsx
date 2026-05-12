@@ -18,6 +18,7 @@ export function HomePage() {
     pdfBase64,
     pdfAvailable,
     pdfError,
+    pdfNote,
     slideDeck,
     setRepoUrl,
     runPipeline,
@@ -91,6 +92,7 @@ export function HomePage() {
               pdfBase64={pdfBase64}
               pdfAvailable={pdfAvailable}
               pdfError={pdfError}
+              pdfNote={pdfNote}
             />
           )}
         </div>

@@ -3,6 +3,7 @@ import { generateSlideDeckSpec } from '../lib/generateSlides.js';
 import { buildPptxBuffer } from '../lib/buildPptx.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import { bufferToBase64 } from '../lib/exportZip.js';
+import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,10 +35,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       process.env.SKIP_PDF === '1' || (process.env.VERCEL === '1' && process.env.ENABLE_PDF_ON_VERCEL !== '1');
     let pdfBuffer: Buffer | null = null;
     let pdfError: string | null = null;
+    let pdfNote: string | null = null;
     if (!skipPdf) {
       const conv = await convertPptxBufferToPdf(pptxBuffer);
       pdfBuffer = conv.pdf;
       pdfError = conv.error;
+    } else {
+      const note = buildPdfSkippedNote();
+      pdfNote = note || null;
     }
 
     res.status(200).json({
@@ -46,6 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pdfBase64: pdfBuffer ? bufferToBase64(pdfBuffer) : null,
       pdfAvailable: Boolean(pdfBuffer),
       pdfError,
+      pdfNote,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '슬라이드 생성에 실패했습니다.';

@@ -19,6 +19,7 @@ import {
   bufferToBase64,
   type ExportBundle,
 } from '../lib/exportZip.js';
+import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 8787);
@@ -73,13 +74,25 @@ app.post('/api/generate-slides', async (req, res) => {
     }
     const slideDeck = await generateSlideDeckSpec(techSpecMarkdown, repoUrl.trim());
     const pptxBuffer = await buildPptxBuffer(slideDeck);
-    const { pdf: pdfBuffer, error: pdfError } = await convertPptxBufferToPdf(pptxBuffer);
+    const skipPdf = process.env.SKIP_PDF === '1';
+    let pdfBuffer: Buffer | null = null;
+    let pdfError: string | null = null;
+    let pdfNote: string | null = null;
+    if (!skipPdf) {
+      const conv = await convertPptxBufferToPdf(pptxBuffer);
+      pdfBuffer = conv.pdf;
+      pdfError = conv.error;
+    } else {
+      const note = buildPdfSkippedNote();
+      pdfNote = note || null;
+    }
     res.json({
       slideDeck,
       pptxBase64: bufferToBase64(pptxBuffer),
       pdfBase64: pdfBuffer ? bufferToBase64(pdfBuffer) : null,
       pdfAvailable: Boolean(pdfBuffer),
       pdfError,
+      pdfNote,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '슬라이드 생성에 실패했습니다.';

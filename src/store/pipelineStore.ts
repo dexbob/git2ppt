@@ -20,6 +20,7 @@ type State = {
   pdfBase64: string | null;
   pdfAvailable: boolean;
   pdfError: string | null;
+  pdfNote: string | null;
   slideDeck: SlideDeckSpec | null;
   setRepoUrl: (v: string) => void;
   reset: () => void;
@@ -37,6 +38,7 @@ const initial = {
   pdfBase64: null as string | null,
   pdfAvailable: false,
   pdfError: null as string | null,
+  pdfNote: null as string | null,
   slideDeck: null as SlideDeckSpec | null,
 };
 
@@ -59,7 +61,7 @@ export const usePipelineStore = create<State>((set, get) => ({
   reset: () => set({ ...initial }),
   runPipeline: async () => {
     const { repoUrl } = get();
-    set({ step: 'analyzing', error: null, pdfError: null });
+    set({ step: 'analyzing', error: null, pdfError: null, pdfNote: null });
     try {
       const { metadata } = await postJson<{ metadata: RepositoryMetadata }>('/api/analyze-repo', {
         url: repoUrl.trim(),
@@ -82,6 +84,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfBase64: string | null;
         pdfAvailable: boolean;
         pdfError?: string | null;
+        pdfNote?: string | null;
       }>('/api/generate-slides', {
         techSpecMarkdown: specRes.techSpecMarkdown,
         repoUrl: metadata.repoUrl,
@@ -92,6 +95,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfBase64: slidesRes.pdfBase64,
         pdfAvailable: slidesRes.pdfAvailable,
         pdfError: slidesRes.pdfError ?? null,
+        pdfNote: slidesRes.pdfNote ?? null,
         step: 'done',
       });
     } catch (e) {

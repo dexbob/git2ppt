@@ -9,6 +9,7 @@ type Props = {
   pdfBase64: string | null;
   pdfAvailable: boolean;
   pdfError: string | null;
+  pdfNote: string | null;
 };
 
 export function ResultDownloadCard({
@@ -18,6 +19,7 @@ export function ResultDownloadCard({
   pdfBase64,
   pdfAvailable,
   pdfError,
+  pdfNote,
 }: Props) {
   const [zipLoading, setZipLoading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
@@ -48,6 +50,11 @@ export function ResultDownloadCard({
       {pdfError && (
         <p className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 text-sm leading-relaxed text-amber-100">
           {pdfError}
+        </p>
+      )}
+      {!pdfError && pdfNote && (
+        <p className="rounded-xl border border-slate-600/50 bg-slate-900/70 px-4 py-3 text-sm leading-relaxed text-slate-300">
+          {pdfNote}
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -109,7 +116,7 @@ export function ResultDownloadCard({
           <div>
             <div className="font-medium text-slate-100">PDF</div>
             <div className="text-xs text-slate-500">
-              {pdfAvailable ? 'slides.pdf' : '로컬/Docker 또는 ENABLE_PDF_ON_VERCEL'}
+              {pdfAvailable ? 'slides.pdf' : '이 환경에서는 미제공 · 아래 안내 참고'}
             </div>
           </div>
         </button>
