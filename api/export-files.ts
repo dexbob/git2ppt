@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { base64ToBuffer, bundleToZipBuffer, type ExportBundle } from '../lib/exportZip';
+import { base64ToBuffer, bundleToZipBuffer, type ExportBundle } from '../lib/exportZip.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

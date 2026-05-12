@@ -1,5 +1,5 @@
-import type { RepositoryMetadata } from './types';
-import { completeJsonText } from './llmCompleteJson';
+import type { RepositoryMetadata } from './types.js';
+import { completeJsonText } from './llmCompleteJson.js';
 
 export type GenerateSpecResult = {
   techSpecMarkdown: string;

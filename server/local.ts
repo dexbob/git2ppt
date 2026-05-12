@@ -6,19 +6,19 @@ import cors from 'cors';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-import type { RepositoryMetadata } from '../lib/types';
-import { analyzeGithubRepository } from '../lib/analyzeRepo';
-import { generateSpecWithOpenAI } from '../lib/generateSpec';
-import { loadInstructionFromFile } from '../lib/instructionFile';
-import { generateSlideDeckSpec } from '../lib/generateSlides';
-import { buildPptxBuffer } from '../lib/buildPptx';
-import { convertPptxBufferToPdf } from '../lib/pdfConvert';
+import type { RepositoryMetadata } from '../lib/types.js';
+import { analyzeGithubRepository } from '../lib/analyzeRepo.js';
+import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
+import { loadInstructionFromFile } from '../lib/instructionFile.js';
+import { generateSlideDeckSpec } from '../lib/generateSlides.js';
+import { buildPptxBuffer } from '../lib/buildPptx.js';
+import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import {
   base64ToBuffer,
   bundleToZipBuffer,
   bufferToBase64,
   type ExportBundle,
-} from '../lib/exportZip';
+} from '../lib/exportZip.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 8787);

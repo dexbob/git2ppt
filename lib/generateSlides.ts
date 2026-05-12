@@ -1,5 +1,5 @@
-import type { SlideDeckSpec } from './types';
-import { completeJsonText } from './llmCompleteJson';
+import type { SlideDeckSpec } from './types.js';
+import { completeJsonText } from './llmCompleteJson.js';
 
 const SLIDE_SCHEMA_HINT = `JSON schema for "slides" array items (use these discriminated "type" values only):
 - {"type":"cover","projectName":string,"tagline":string,"repoUrl":string,"generatedAt":string ISO}

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateSlideDeckSpec } from '../lib/generateSlides';
-import { buildPptxBuffer } from '../lib/buildPptx';
-import { convertPptxBufferToPdf } from '../lib/pdfConvert';
-import { bufferToBase64 } from '../lib/exportZip';
+import { generateSlideDeckSpec } from '../lib/generateSlides.js';
+import { buildPptxBuffer } from '../lib/buildPptx.js';
+import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
+import { bufferToBase64 } from '../lib/exportZip.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

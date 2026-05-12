@@ -1,8 +1,8 @@
-import type { RepositoryMetadata } from './types';
-import { parseGithubRepoUrl } from './github';
-import { cloneGithubRepo, removeCloneDir } from './cloneRepo';
-import { downloadGithubRepoZip } from './downloadGithubZip';
-import { scanRepository } from './scanRepo';
+import type { RepositoryMetadata } from './types.js';
+import { parseGithubRepoUrl } from './github.js';
+import { cloneGithubRepo, removeCloneDir } from './cloneRepo.js';
+import { downloadGithubRepoZip } from './downloadGithubZip.js';
+import { scanRepository } from './scanRepo.js';
 
 function useZipMode(): boolean {
   if (process.env.USE_GITHUB_ZIP === '1') return true;

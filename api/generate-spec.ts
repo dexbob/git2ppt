@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { RepositoryMetadata } from '../lib/types';
-import { generateSpecWithOpenAI } from '../lib/generateSpec';
-import { loadInstructionFromFile } from '../lib/instructionFile';
+import type { RepositoryMetadata } from '../lib/types.js';
+import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
+import { loadInstructionFromFile } from '../lib/instructionFile.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import simpleGit from 'simple-git';
-import type { ParsedGithubRepo } from './types';
-import { buildCloneUrl } from './github';
+import type { ParsedGithubRepo } from './types.js';
+import { buildCloneUrl } from './github.js';
 
 const CLONE_TIMEOUT_MS = Number(process.env.GIT_CLONE_TIMEOUT_MS ?? 120_000);
 

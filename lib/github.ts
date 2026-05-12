@@ -1,4 +1,4 @@
-import type { ParsedGithubRepo } from './types';
+import type { ParsedGithubRepo } from './types.js';
 
 const SAFE_SEGMENT = /^[a-zA-Z0-9_.-]+$/;
 

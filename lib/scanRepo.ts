@@ -6,7 +6,7 @@ import type {
   ParsedGithubRepo,
   PriorityFileSummary,
   RepositoryMetadata,
-} from './types';
+} from './types.js';
 
 const PRIORITY_FILES = [
   'package.json',

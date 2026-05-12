@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
-import type { ParsedGithubRepo } from './types';
+import type { ParsedGithubRepo } from './types.js';
 
 export type ZipDownloadResult = {
   repoDir: string;

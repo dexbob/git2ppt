@@ -1,5 +1,5 @@
 import PptxGenJS from 'pptxgenjs';
-import type { SlideDeckSpec, SlideSpec } from './types';
+import type { SlideDeckSpec, SlideSpec } from './types.js';
 
 const BG = '0B1020';
 const ACCENT1 = '7C3AED';

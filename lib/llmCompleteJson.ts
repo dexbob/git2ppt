@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { resolveLlmBackend } from './llmProvider';
+import { resolveLlmBackend } from './llmProvider.js';
 
 function stripJsonFences(raw: string): string {
   const t = raw.trim();
