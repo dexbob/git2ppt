@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const DEFAULT_REL = path.join('instructions', '인스트럭션.md');
+const DEFAULT_REL = path.join('reference', 'instruction.md');
 
 /**
  * Loads optional tech-spec instructions from disk.
- * Path: `INSTRUCTION_FILE` env (absolute or relative to `process.cwd()`), else `instructions/인스트럭션.md`.
+ * Path: `INSTRUCTION_FILE` env (absolute or relative to `process.cwd()`), else `reference/instruction.md`.
  * Missing file or empty content → `undefined`.
  */
 export async function loadInstructionFromFile(): Promise<string | undefined> {

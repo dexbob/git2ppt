@@ -68,11 +68,16 @@ app.post('/api/generate-slides', async (req, res) => {
   try {
     const techSpecMarkdown = req.body?.techSpecMarkdown as string | undefined;
     const repoUrl = req.body?.repoUrl as string | undefined;
+    const readmeMarkdown = req.body?.readmeMarkdown as string | undefined;
     if (!techSpecMarkdown?.trim() || !repoUrl?.trim()) {
       res.status(400).json({ error: 'techSpecMarkdown와 repoUrl이 필요합니다.' });
       return;
     }
-    const slideDeck = await generateSlideDeckSpec(techSpecMarkdown, repoUrl.trim());
+    const slideDeck = await generateSlideDeckSpec(
+      techSpecMarkdown,
+      repoUrl.trim(),
+      readmeMarkdown,
+    );
     const pptxBuffer = await buildPptxBuffer(slideDeck);
     const skipPdf = process.env.SKIP_PDF === '1';
     let pdfBuffer: Buffer | null = null;

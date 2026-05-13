@@ -23,12 +23,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const techSpecMarkdown = body?.techSpecMarkdown as string | undefined;
     const repoUrl = body?.repoUrl as string | undefined;
+    const readmeMarkdown = body?.readmeMarkdown as string | undefined;
     if (!techSpecMarkdown?.trim() || !repoUrl?.trim()) {
       res.status(400).json({ error: 'techSpecMarkdown와 repoUrl이 필요합니다.' });
       return;
     }
 
-    const slideDeck = await generateSlideDeckSpec(techSpecMarkdown, repoUrl.trim());
+    const slideDeck = await generateSlideDeckSpec(
+      techSpecMarkdown,
+      repoUrl.trim(),
+      readmeMarkdown,
+    );
     const pptxBuffer = await buildPptxBuffer(slideDeck);
 
     const skipPdf =

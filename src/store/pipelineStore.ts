@@ -88,6 +88,7 @@ export const usePipelineStore = create<State>((set, get) => ({
       }>('/api/generate-slides', {
         techSpecMarkdown: specRes.techSpecMarkdown,
         repoUrl: metadata.repoUrl,
+        readmeMarkdown: specRes.readmeMarkdown,
       });
       set({
         slideDeck: slidesRes.slideDeck,

@@ -62,6 +62,8 @@ export type SlideCoverSlide = {
 export type SlideClosingSlide = {
   type: 'closing';
   repoUrl: string;
+  /** 기술명세에 근거한 향후 개선·추가 기능 (없으면 빈 배열) */
+  futureBullets?: string[];
 };
 
 export type SlideSpec =
