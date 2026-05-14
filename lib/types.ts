@@ -62,8 +62,10 @@ export type SlideCoverSlide = {
 export type SlideClosingSlide = {
   type: 'closing';
   repoUrl: string;
-  /** 기술명세에 근거한 향후 개선·추가 기능 (없으면 빈 배열) */
-  futureBullets?: string[];
+  /** 발표 전체를 압축하는 핵심 요약 (2~3줄). 9번 슬라이드의 향후 개선과 중복되지 않아야 한다. */
+  takeaways?: string[];
+  /** 청중이 곧바로 따라할 수 있는 한 줄 실행 명령 (예: "npm install && npm run dev") */
+  runCommand?: string;
 };
 
 export type SlideSpec =

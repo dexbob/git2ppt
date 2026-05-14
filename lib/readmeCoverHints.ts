@@ -57,8 +57,16 @@ export function applyReadmeToCoverSlide(spec: SlideDeckSpec, readmeMarkdown: str
 
 export function normalizeClosingSlide(spec: SlideDeckSpec): void {
   for (const s of spec.slides) {
-    if (s.type === 'closing' && !Array.isArray(s.futureBullets)) {
-      s.futureBullets = [];
+    if (s.type !== 'closing') continue;
+    if (!Array.isArray(s.takeaways)) {
+      s.takeaways = [];
+    } else {
+      s.takeaways = s.takeaways.map((t) => String(t ?? '').trim()).filter(Boolean);
+    }
+    if (typeof s.runCommand !== 'string') {
+      s.runCommand = '';
+    } else {
+      s.runCommand = s.runCommand.trim();
     }
   }
 }

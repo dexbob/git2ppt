@@ -7,12 +7,16 @@ const SLIDE_SCHEMA_HINT = `JSON schema for "slides" array items (use these discr
 - {"type":"bullets","title":string,"bullets":string[]}
 - {"type":"cards","title":string,"cards":{"title":string,"body":string}[]}
 - {"type":"flow","title":string,"steps":string[]}
-- {"type":"closing","repoUrl":string,"futureBullets":string[]}
+- {"type":"closing","repoUrl":string,"takeaways":string[],"runCommand":string}
 
 Order: cover, bullets overview, cards tech stack, flow architecture, bullets directory, cards core features, flow AI workflow, bullets deployment, bullets future, closing.
 Text: Korean concise presentation tone.
 
-For type "closing": include futureBullets with 2–4 short Korean lines naming plausible future improvements or extensions that appear in (or are clearly implied by) the technical spec. If the spec does not mention any, use an empty array [].
+For type "bullets" at the "bullets future" position (9th slide): list 3–5 concrete future improvements or extensions grounded in the tech spec.
+
+For type "closing" (final slide): this slide is the deck wrap-up and MUST NOT repeat the future-improvements content from the 9th slide.
+- takeaways: 2–3 short Korean lines that compress the whole deck into memorable points. Prefer one of: project's one-sentence definition, the core problem it solves, the standout architectural/technical decision, or a quantitative highlight (e.g., 모듈 수, 지원 API 개수). Never restate items already listed on the 9th "bullets future" slide.
+- runCommand: a single short shell command that lets the audience try the project locally. Prefer commands taken verbatim from the README's "Getting Started" / "Quick Start" / "설치" / "실행" section (e.g., "npm install && npm run dev", "docker compose up"). If the README has no such command, use an empty string "".
 
 CRITICAL: Every slide must reflect ONLY the provided repository URL and the technical specification markdown below. Do not invent product features, stack items, or domain content that are not clearly supported by that tech spec. Do not reuse wording from unrelated sample documents.
 

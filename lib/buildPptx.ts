@@ -476,6 +476,8 @@ function addFlowSlide(
   addFooter(pptx, slide, footerOwner || 'GitHub', brandRight);
 }
 
+const MONO_FONT = 'Courier New';
+
 function addClosingSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'closing' }>,
@@ -487,11 +489,22 @@ function addClosingSlide(
   slide.background = { color: BG };
   addHeaderBand(slide, sectionTag, '마무리');
 
-  const bullets = (s.futureBullets ?? []).map((b) => b.trim()).filter(Boolean).slice(0, 5);
-  let y = 1.42;
+  const takeaways = (s.takeaways ?? [])
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const runCommand = (s.runCommand ?? '').trim();
 
-  if (bullets.length > 0) {
-    slide.addText('향후 개선 · 추가 기능', {
+  /** 본문 가용 영역 (헤더 ~ repoUrl 위) */
+  const bodyTop = 1.42;
+  const urlH = 0.45;
+  const urlReserve = urlH + 0.18;
+  const bodyBottom = CONTENT_MAX_Y - urlReserve;
+
+  let y = bodyTop;
+
+  if (takeaways.length > 0) {
+    slide.addText('핵심 요약', {
       x: XM,
       y,
       w: WM,
@@ -501,15 +514,16 @@ function addClosingSlide(
       color: ACCENT,
       fontFace: FONT,
     });
-    y += 0.42;
+    y += 0.4;
 
-    const rowGap = 0.1;
-    const per = Math.min(0.58, (CONTENT_MAX_Y - y - 0.85) / Math.max(1, bullets.length) - rowGap);
-    const fs = per < 0.44 ? 11 : 12;
+    const rowGap = 0.08;
+    const codeBlockReserve = runCommand ? 0.32 + 0.1 + 0.55 + 0.2 : 0;
+    const avail = Math.max(0.6, bodyBottom - y - codeBlockReserve);
+    const rowH = Math.min(0.56, (avail - rowGap * Math.max(0, takeaways.length - 1)) / takeaways.length);
+    const fs = rowH < 0.44 ? 11 : 13;
 
-    bullets.forEach((line, i) => {
+    takeaways.forEach((line, i) => {
       const num = String(i + 1).padStart(2, '0');
-      /** 번호·본문을 한 문단으로 두어 베이스라인이 어긋나지 않게 함 */
       slide.addText(
         [
           { text: `${num}  `, options: { color: ACCENT, bold: true, fontSize: fs, fontFace: FONT } },
@@ -519,22 +533,65 @@ function addClosingSlide(
           x: XM,
           y,
           w: WM,
-          h: Math.max(0.36, per),
+          h: Math.max(0.36, rowH),
           valign: 'top',
           wrap: true,
           fontFace: FONT,
         },
       );
-      y += per + rowGap;
+      y += rowH + rowGap;
     });
+    y += 0.12;
   }
 
-  const urlY = Math.max(3.25, Math.min(y + 0.28, 4.35));
+  if (runCommand) {
+    slide.addText('빠른 시작', {
+      x: XM,
+      y,
+      w: WM,
+      h: 0.32,
+      fontSize: 12,
+      bold: true,
+      color: ACCENT,
+      fontFace: FONT,
+    });
+    y += 0.4;
+
+    const codeH = 0.55;
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: XM,
+      y,
+      w: WM,
+      h: codeH,
+      fill: { color: PANEL },
+      line: { color: RULE, width: 1 },
+      rectRadius: 0.06,
+    });
+    const display = runCommand.length > 80 ? `${runCommand.slice(0, 77)}…` : runCommand;
+    slide.addText(
+      [
+        { text: '$ ', options: { color: ACCENT, bold: true, fontSize: 13, fontFace: MONO_FONT } },
+        { text: display, options: { color: TEXT, fontSize: 13, fontFace: MONO_FONT } },
+      ],
+      {
+        x: XM + 0.18,
+        y: y + 0.04,
+        w: WM - 0.36,
+        h: codeH - 0.08,
+        valign: 'middle',
+        wrap: false,
+        fontFace: MONO_FONT,
+      },
+    );
+    y += codeH + 0.18;
+  }
+
+  const urlY = Math.min(Math.max(y, bodyBottom + 0.04), CONTENT_MAX_Y - urlH);
   slide.addText(s.repoUrl, {
     x: XM,
     y: urlY,
     w: WM,
-    h: 0.55,
+    h: urlH,
     fontSize: 12,
     color: ACCENT,
     fontFace: FONT,
