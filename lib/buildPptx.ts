@@ -132,7 +132,7 @@ function addCoverSlide(
 
   const gitY = 0.22;
   const gitH = 0.32;
-  slide.addText('GIT REPOSITORY / MVP', {
+  slide.addText('GIT REPOSITORY', {
     x: XM,
     y: gitY,
     w: WM,

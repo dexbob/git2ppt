@@ -9,7 +9,7 @@ export type ExportBundle = {
   pdfBuffer: Buffer | null;
 };
 
-/** Append standard MVP filenames to an archiver instance (caller must pipe and finalize). */
+/** Append standard export filenames to an archiver instance (caller must pipe and finalize). */
 export function appendBundleToArchive(archive: Archiver, bundle: ExportBundle): void {
   archive.append(bundle.readmeMarkdown, { name: 'README.md' });
   archive.append(bundle.techSpecMarkdown, { name: 'tech_spec.md' });

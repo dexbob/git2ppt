@@ -1,206 +1,251 @@
-# Git Repository Presentation Generator (MVP)
+# Git Repository Presentation Generator
 
-**Git 저장소 기반 자동 프레젠테이션 생성기** — GitHub URL 하나로 저장소를 읽고, AI가 기술명세·요약 README·발표 슬라이드(PPT/PDF)까지 만들어 주는 웹 MVP입니다.
+**Git 저장소 기반 자동 프레젠테이션 생성기** — GitHub URL 하나로 저장소를 읽고, AI가 기술명세·요약 README·발표 슬라이드(PPT/PDF)까지 만들어 주는 웹 앱입니다.
+
+| | |
+|---|---|
+| npm 패키지명 | `git2ppt` |
+| 버전 | `1.0.0` |
+| Node.js | 20+ |
 
 ---
 
 ## 이 프로젝트가 하는 일
 
-개발자가 낯선 저장소를 **빠르게 이해하고 발표 자료까지** 준비하는 시간을 줄이는 것이 목표입니다. 웹 화면에서 공개(또는 토큰으로 접근 가능한) GitHub 저장소 주소를 넣고 실행하면, 서버가 아래를 **순서대로** 수행합니다.
+개발자가 낯선 저장소를 **빠르게 이해하고 발표 자료까지** 준비하는 시간을 줄이는 것이 목표입니다. 웹 화면에서 공개(또는 `GITHUB_TOKEN`으로 접근 가능한) GitHub 저장소 HTTPS URL을 넣고 **「분석 및 자료 생성」** 을 실행하면, 서버가 아래를 **순서대로** 수행합니다.
 
-1. **저장소 가져오기·분석** — 로컬/Docker에서는 `git` shallow clone, Vercel 등 서버리스에서는 GitHub API/ZIP로 소스를 가져옵니다. `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스를 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 담은 **메타데이터(JSON)** 로 정리합니다.
-2. **Reverse engineering 성격의 기술명세** — 스캔 결과를 바탕으로 LLM이 **마크다운 기술명세**를 작성합니다. 서버는 저장소 루트의 [`reference/instruction.md`](reference/instruction.md) 내용(비어 있지 않을 때만)을 추가 인스트럭션으로 넣습니다. 경로를 바꾸려면 환경 변수 `INSTRUCTION_FILE`(절대 또는 `cwd` 기준 상대)을 설정합니다.
-3. **발표용 슬라이드** — 생성된 기술명세를 입력으로 슬라이드 구조(JSON)를 만든 뒤, **PPTX**로 렌더링합니다. **PDF**는 LibreOffice headless가 있는 환경(로컬 Express 등)에서 PPTX를 변환해 제공합니다. Vercel 기본값에서는 PDF 생성을 건너뜁니다.
+1. **저장소 가져오기·분석** — 환경에 따라 `git` shallow clone 또는 GitHub API + ZIP으로 소스를 가져옵니다. `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스 스니펫을 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 **메타데이터(JSON)** 로 정리합니다.
+2. **기술명세 생성** — 스캔 결과를 바탕으로 LLM이 **마크다운 기술명세**(`tech_spec.md` 성격)와 **짧은 요약 README**를 작성합니다. [`reference/instruction.md`](reference/instruction.md)가 비어 있지 않으면 추가 인스트럭션으로 사용합니다(`INSTRUCTION_FILE`로 경로 변경 가능).
+3. **발표용 슬라이드** — 기술명세를 입력으로 슬라이드 구조(JSON)를 만든 뒤 **PPTX**로 렌더링합니다. LibreOffice(`soffice`)가 있는 환경에서는 **PDF** 변환도 시도합니다.
 
-LLM은 **Gemini 또는 OpenAI**를 지원합니다. 키가 둘 다 있으면 기본(`LLM_PROVIDER=auto`)은 Gemini를 우선합니다.
+LLM은 **Gemini 또는 OpenAI**만 지원합니다(`LLM_PROVIDER=auto`일 때 `GEMINI_API_KEY`가 있으면 Gemini, 없으면 OpenAI).
 
-### 사용자 플로우 (요약)
+### 사용자 플로우
 
 ```text
-GitHub URL 입력 → 저장소 분석 → AI 기술명세 생성 → 슬라이드 생성 → Markdown / PPT / PDF 다운로드
+GitHub URL 입력 → Clone/스캔 → 기술명세서 → 슬라이드/PPT → README·tech_spec·PPT·PDF(가능 시)·ZIP 다운로드
 ```
 
-### UI (이 앱)
+### UI
 
-- 단일 화면, 다크 톤의 미니멀 UI
-- URL 입력 + **「분석 및 자료 생성」** CTA (전체 파이프라인 실행)
-- 진행 단계 카드: Clone/스캔 → 기술명세서 → 슬라이드/PPT → **완료**(전 단계 완료로 표시)
-- 슬라이드 구조 **미리보기**
-- 완료 후 README·기술명세·PPT·PDF(가능 시) 및 ZIP 다운로드
-- PDF 변환을 시도했으나 실패한 경우, 다운로드 영역에 **안내 문구**(`pdfError`) 표시
+- 단일 페이지, 다크 톤 (`src/pages/HomePage.tsx`)
+- 진행 단계: **Clone / 스캔** → **기술명세서** → **슬라이드 / PPT** → **완료**
+- 생성된 슬라이드 구조 **미리보기** (`SlidePreview`)
+- 개별 다운로드: `README.md`, `tech_spec.md`, `slides.pptx`, `slides.pdf`(가능 시), **ZIP 일괄** (`presentation-bundle.zip`)
+- PDF 미제공·변환 실패 시 `pdfNote` / `pdfError` 안내
 
-### 생성되는 기술명세(`tech_spec.md`)에 담기는 내용
+### 생성물
 
-- 프로젝트 개요(목적, 핵심 기능, 사용자·문제 정의)
-- 기술 스택 분석(프론트/백엔드/상태관리/스타일·빌드/배포/AI API 등)
-- 시스템 아키텍처·데이터 흐름·API 구조
-- 주요 기능 분석
-- 디렉터리 구조 설명
-- 실행·배포 방법
-- 향후 개선 포인트
+| 파일 | 설명 |
+|------|------|
+| `README.md` | 대상 저장소용 요약 (생성) |
+| `tech_spec.md` | 역공학 성격의 기술명세 (생성) |
+| `slides.pptx` | PptxGenJS 기반 발표 슬라이드 |
+| `slides.pdf` | LibreOffice 변환 성공 시 (선택) |
 
-동시에 저장소용으로 쓸 수 있는 **짧은 요약 `README.md`** 도 별도로 생성합니다.
+슬라이드는 다크 톤·카드형 레이아웃이며, 저장소·기술명세 내용에 따라 표지·스택·아키텍처·기능·배포 등 섹션이 구성됩니다.
 
-### 슬라이드
+---
 
-- **스타일**: 다크 기반, 큰 타이포, 카드형 정보 블록, 섹션 구분이 드러나는 발표용 레이아웃(PptxGenJS로 구성).
-- **구성 예** (내용은 저장소마다 달라짐): 표지 → 개요 → 기술 스택 → 아키텍처 → 디렉터리 → 핵심 기능 → AI 워크플로 → 배포 → 향후 과제 → 클로징.
+## 기술 스택 (이 앱)
 
-### 이 저장소의 구현 스택 (앱 자체)
+| 영역 | 기술 |
+|------|------|
+| 프론트 | React 18, TypeScript, Vite, Tailwind CSS, Zustand, Framer Motion, Lucide, React Router |
+| API (로컬) | Express — [`server/local.ts`](server/local.ts) |
+| API (배포) | Vercel Serverless — [`api/`](api/) |
+| 공유 로직 | [`lib/`](lib/) (`@lib` 별칭) |
+| LLM | `@google/generative-ai`, `openai` |
+| 문서·슬라이드 | PptxGenJS, LibreOffice(선택 PDF), `archiver`(ZIP) |
+| 저장소 수집 | `simple-git`(clone), `adm-zip`(GitHub ZIP) |
 
-- **프론트**: React 18, TypeScript, Vite, Tailwind CSS, Zustand, Framer Motion, Lucide, React Router
-- **API**: 로컬은 Express(`server/local.ts`), 배포는 Vercel Serverless `api/*.ts` — 비즈니스 로직은 `lib/`에서 공유 (`import` 별칭 `@lib`)
-- **문서·슬라이드**: OpenAI / Google Generative AI SDK, PptxGenJS, (선택) LibreOffice로 PDF, ZIP은 `archiver`
+---
+
+## 프로젝트 구조
+
+| 경로 | 역할 |
+|------|------|
+| `src/` | React UI (페이지, 컴포넌트, Zustand 스토어) |
+| `lib/` | GitHub 분석, LLM, PPTX/PDF, ZIP |
+| `server/local.ts` | 로컬 Express API + (선택) `dist` 정적 서빙 |
+| `api/` | Vercel 핸들러 (`analyze-repo`, `generate-spec`, `generate-slides`, `export-files`) |
+| `reference/` | [`instruction.md`](reference/instruction.md)(기술명세 톤), 샘플 문서 |
+| `start_server.sh` | 의존성 검사 후 로컬/프로덕션 모드 실행 |
+| `docker-compose.yml`, `Dockerfile` | 컨테이너 실행 |
+| `vercel.json` | Serverless 함수 타임아웃·`lib`/`reference` 포함 |
 
 ---
 
 ## 요구 사항
 
-- Node.js 20+
-- LLM 키 **하나 이상**: [Gemini (Google AI Studio)](https://aistudio.google.com/apikey) `GEMINI_API_KEY` 또는 [OpenAI](https://platform.openai.com/) `OPENAI_API_KEY`
-- (선택) 비공개 저장소 또는 rate limit 완화용 `GITHUB_TOKEN`
-- (선택) 로컬에서 **PDF**까지 받으려면 LibreOffice(`soffice`) — 설치·한글 폰트·환경 변수는 아래 **「PDF 생성 (로컬 / Express)」** 절을 참고합니다.
+- **Node.js 20+**
+- LLM 키 **하나 이상**: [`GEMINI_API_KEY`](https://aistudio.google.com/apikey) 또는 [`OPENAI_API_KEY`](https://platform.openai.com/)
+- (선택) 비공개 저장소·API rate limit: `GITHUB_TOKEN`
+- (선택) PDF: LibreOffice `soffice` (+ Impress 권장, 한글은 CJK 폰트)
 
 ---
 
-## 프로젝트 구조 (요약)
-
-| 경로 | 역할 |
-|------|------|
-| `src/` | React 앱 (페이지·컴포넌트·스토어) |
-| `lib/` | 분석·스펙·슬라이드·PDF·ZIP 등 공유 로직 |
-| `server/local.ts` | 로컬 개발용 Express API |
-| `api/` | Vercel Serverless 핸들러 (`analyze-repo`, `generate-spec`, `generate-slides`, …) |
-| `reference/` | 샘플·참고 문서, 기술명세 톤용 [`instruction.md`](reference/instruction.md) (비어 있으면 무시) |
-
----
-
-## 로컬 개발
+## 빠른 시작
 
 ```bash
 cp .env.example .env.local
-# .env.local 에 GEMINI_API_KEY 또는 OPENAI_API_KEY 등을 채웁니다.
-# 둘 다 있으면 기본은 Gemini (LLM_PROVIDER=auto). OpenAI만 쓰려면 LLM_PROVIDER=openai.
+# .env.local 에 GEMINI_API_KEY 또는 OPENAI_API_KEY 설정
 
 npm install
 npm run dev
 ```
 
-- 프론트: [http://127.0.0.1:5173](http://127.0.0.1:5173) (Vite)
-- API: [http://127.0.0.1:8787](http://127.0.0.1:8787) — Vite가 `/api`를 프록시합니다.
+| 서비스 | URL |
+|--------|-----|
+| 프론트 (Vite) | http://127.0.0.1:5173 |
+| API (Express) | http://127.0.0.1:8787 — Vite가 `/api`를 프록시 |
 
-기술명세 톤·강조는 [`reference/instruction.md`](reference/instruction.md)에 작성합니다(`INSTRUCTION_FILE`로 다른 경로 지정 가능). 파일을 고친 뒤에는 **API 서버를 재시작**해야 다시 읽습니다.
+[`reference/instruction.md`](reference/instruction.md)를 수정한 뒤에는 **API 서버를 재시작**해야 반영됩니다.
+
+### `start_server.sh` (대안)
+
+의존성(`node_modules`, `tsc`/`vite`/`tsx`)이 없으면 `npm install` 안내 후 종료합니다.
+
+```bash
+chmod +x start_server.sh   # 최초 1회
+
+./start_server.sh local    # npm run dev 와 동일 (HMR, 5173 + 8787)
+./start_server.sh          # npm run build 후 SERVE_STATIC=1 로 8787 단일 포트
+```
+
+두 번째 모드는 Tailscale 등 **외부에서 8787 하나만** 열 때 유용합니다.
 
 ### npm 스크립트
 
 | 명령 | 설명 |
 |------|------|
-| `npm run dev` | Vite + Express(`tsx watch server/local.ts`) 동시 실행 |
+| `npm run dev` | Vite + Express 동시 실행 |
 | `npm run dev:client` | 프론트만 |
 | `npm run dev:server` | API만 |
-| `npm run build` | `tsc` + Vite 프로덕션 빌드 |
-| `npm run typecheck` | 타입 검사만 (`tsc --noEmit`) |
-| `npm run preview` | 빌드 결과 미리보기 |
-| `npm run start:docker` | Docker 이미지에서 사용 (`SERVE_STATIC=1`로 정적 UI + API) |
+| `npm run build` | `tsc` + Vite 프로덕션 빌드 → `dist/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run preview` | 빌드 결과 미리보기 (Vite) |
+| `npm run start:docker` | Docker CMD — `SERVE_STATIC=1` Express |
 
-### PDF 생성 (로컬 / Express)
+---
 
-로컬 API(`server/local.ts`)는 PPTX 생성 후 **LibreOffice headless**(`soffice`)로 `slides.pdf`를 만듭니다. 바이너리가 없거나 변환이 실패하면 PPTX는 그대로 내려가고, 응답 필드 `pdfError`와 UI 안내 문구로 이유를 알 수 있습니다. 서버 콘솔에는 `[git2ppt] LibreOffice PDF 변환 실패` 로그가 남습니다.
+## 저장소 가져오기 방식
 
-#### Ubuntu / Debian / WSL에 LibreOffice 설치
+| 조건 | 방식 |
+|------|------|
+| `USE_GITHUB_ZIP=1` | GitHub API + ZIP (`lib/downloadGithubZip.ts`) |
+| `USE_GITHUB_ZIP=0` | `git` shallow clone (`lib/cloneRepo.ts`) |
+| `VERCEL=1` 이고 위 미설정 | 기본 **ZIP** |
+| 그 외 로컬 | 기본 **git clone** → `temp/clones/` |
 
-PPTX는 **Impress** 쪽 필터가 필요합니다. Writer만 있으면 변환이 실패할 수 있습니다.
+클론/ZIP 임시 디렉터리는 분석 후 삭제됩니다. GitHub API 호출 시 User-Agent는 `git2ppt`입니다.
+
+---
+
+## 환경 변수
+
+전체 목록: [`.env.example`](.env.example)
+
+### LLM
+
+| 변수 | 설명 |
+|------|------|
+| `LLM_PROVIDER` | `auto`(기본) / `gemini` / `openai` |
+| `GEMINI_API_KEY` | Google AI Studio |
+| `GEMINI_MODEL` | 비우면 `gemini-1.5-flash` |
+| `OPENAI_API_KEY` | OpenAI |
+| `OPENAI_MODEL` | 기본 `gpt-4o` |
+
+> `.env.example`의 `ANTHROPIC_API_KEY`는 현재 코드에서 **사용하지 않습니다**.
+
+### GitHub·분석
+
+| 변수 | 설명 |
+|------|------|
+| `GITHUB_TOKEN` | 비공개 저장소·rate limit |
+| `GIT_CLONE_TIMEOUT_MS` | clone 타임아웃 (기본 `120000`) |
+| `USE_GITHUB_ZIP` | `1` / `0` — ZIP·clone 강제 |
+| `GITHUB_ZIP_TIMEOUT_MS` | ZIP 타임아웃 (기본 `120000`) |
+| `INSTRUCTION_FILE` | 기술명세 인스트럭션 경로 (기본 `reference/instruction.md`) |
+
+### 서버
+
+| 변수 | 설명 |
+|------|------|
+| `PORT` | 로컬 API 포트 (기본 `8787`) |
+| `SERVER_TIMEOUT_MS` | Express 소켓 타임아웃 (기본 `600000`) |
+| `SERVE_STATIC` | `1`이면 `dist/` 정적 UI + SPA fallback |
+
+### PDF (LibreOffice)
+
+| 변수 | 설명 |
+|------|------|
+| `SOFFICE_PATH` | `soffice` 경로 (비우면 `PATH` 검색) |
+| `LIBREOFFICE_TIMEOUT_MS` | 변환 타임아웃 (기본 `180000`) |
+| `SKIP_PDF` | `1`이면 PDF 생략 (PPTX만) |
+| `ENABLE_PDF_ON_VERCEL` | `1`일 때만 Vercel에서 PDF 변환 **시도** (기본은 생략) |
+
+로컬 Express에서 변환 실패 시 콘솔: `[git2ppt] LibreOffice PDF 변환 실패`.
+
+#### Ubuntu / Debian / WSL
 
 ```bash
 sudo apt update
 sudo apt install -y libreoffice libreoffice-impress libreoffice-writer libreoffice-core fonts-liberation
-```
-
-설치 확인:
-
-```bash
-soffice --version
-which soffice
-# 일부 배포판은 /bin/libreoffice 만 있는 경우가 있음 → which libreoffice
-```
-
-수동으로 한 번 변환해 보면 환경 문제를 바로 구분할 수 있습니다.
-
-```bash
-cd /path/to/any/dir
-soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
-```
-
-성공 시 `slides.pdf`가 같은 디렉터리에 생기고, 터미널에 `impress_pdf_Export` 등의 메시지가 출력됩니다.
-
-#### 한글·CJK가 PDF에서 깨질 때
-
-슬라이드 기본 폰트가 Arial 계열이면 Linux에서 한글이 네모·깨짐으로 나올 수 있습니다. 변환 머신에 **한글 지원 폰트**를 설치하세요.
-
-```bash
+# 한글 PDF
 sudo apt install -y fonts-noto-cjk fonts-nanum
 ```
 
-#### 환경 변수 (PDF 관련, `.env.local`)
-
-| 변수 | 설명 |
-|------|------|
-| `SOFFICE_PATH` | 비우면 `soffice`를 `PATH`에서 찾습니다. `libreoffice`만 있는 경우 등에는 예: `/usr/bin/libreoffice` |
-| `LIBREOFFICE_TIMEOUT_MS` | 변환 타임아웃(ms). 기본 `180000` |
-| `SKIP_PDF` | `1`이면 PDF 변환을 건너뜁니다(PPTX만). Vercel에서도 동일 |
-
-Vercel에서는 아래 **「Vercel 배포」** 절을 참고하세요.
-
-### LLM (Gemini / OpenAI)
-
-- **`LLM_PROVIDER`**: `auto`(기본) / `gemini` / `openai`. `auto`일 때는 `GEMINI_API_KEY`가 있으면 Gemini, 없으면 OpenAI를 씁니다.
-- **`GEMINI_MODEL`**: 비우면 **`gemini-1.5-flash`**. AI Studio에서 제공하는 모델 ID(예: `gemini-2.0-flash`)로 바꿀 수 있습니다.
-- **`OPENAI_MODEL`**: OpenAI 사용 시만 적용됩니다(기본 `gpt-4o`).
-
-### 기타 환경 변수
-
-전체 목록과 주석은 [`.env.example`](.env.example)을 참고하세요. 자주 쓰는 항목만 요약합니다.
-
-| 변수 | 설명 |
-|------|------|
-| `INSTRUCTION_FILE` | 비우면 `reference/instruction.md` |
-| `GITHUB_TOKEN` | 비공개 저장소·API 한도 완화 |
-| `GIT_CLONE_TIMEOUT_MS` | 로컬 `git` 클론 타임아웃 (기본 120000) |
-| `USE_GITHUB_ZIP` | `1`이면 로컬에서도 ZIP 방식으로 소스 수집 |
-| `GITHUB_ZIP_TIMEOUT_MS` | ZIP 다운로드 타임아웃 |
-| `PORT` | 로컬 API 포트 (기본 8787) |
-| `SERVER_TIMEOUT_MS` | Express 서버 소켓 타임아웃 (기본 600000) |
-| `ENABLE_PDF_ON_VERCEL` | Vercel에서 PDF 변환 시도(실험용, `1`일 때) |
+```bash
+soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
+```
 
 ---
 
-## Docker (UI + API)
+## Docker
 
 ```bash
 docker compose build
-docker compose run --rm -e GEMINI_API_KEY=... app
-# 또는 OpenAI만: -e OPENAI_API_KEY=...
 docker compose up --build
+# LLM 키는 compose environment 또는 -e 로 전달 (GEMINI_API_KEY / OPENAI_API_KEY)
 ```
 
-브라우저에서 `http://localhost:8787` 을 열면 빌드된 정적 UI와 API가 같은 포트에서 제공됩니다.
+브라우저: http://localhost:8787 (`SERVE_STATIC=1`, UI + API 동일 포트).
 
-**PDF 주의:** 현재 [`Dockerfile`](Dockerfile)의 `apt-get`에는 `libreoffice-impress`가 포함되어 있지 않아, **컨테이너 안에서 PPTX→PDF가 실패할 수 있습니다.** PDF가 필요하면 `libreoffice-impress` 또는 메타 패키지 `libreoffice`를 Dockerfile에 추가하고, 한글 PDF가 필요하면 위 로컬 절의 **CJK 폰트** 설치도 같은 단계에 넣는 것을 권장합니다. [`docker-compose.yml`](docker-compose.yml)의 `environment`에 `GEMINI_API_KEY` 등 LLM 키를 넣어 주세요.
+**PDF:** [`Dockerfile`](Dockerfile)에 `libreoffice-impress`가 없어 컨테이너에서 PPTX→PDF가 실패할 수 있습니다. PDF가 필요하면 `libreoffice-impress` 또는 메타 패키지 `libreoffice`와 CJK 폰트를 이미지에 추가하세요.
+
+[`docker-compose.yml`](docker-compose.yml) 예시는 `OPENAI_API_KEY`만 매핑되어 있으나, `GEMINI_API_KEY` 등도 동일하게 `environment`에 넣으면 됩니다.
 
 ---
 
 ## Vercel 배포
 
-1. 저장소를 Vercel에 연결합니다.
-2. 환경 변수에 `GEMINI_API_KEY` 또는 `OPENAI_API_KEY`를 설정합니다. (비공개 저장소·ZIP rate limit에는 `GITHUB_TOKEN` 권장)
-3. Vercel(`VERCEL=1`)에서는 **git 대신 GitHub ZIP + API**로 소스를 가져옵니다. 로컬에서도 동일 방식을 쓰려면 `USE_GITHUB_ZIP=1`을 설정합니다.
-4. 서버리스 환경에는 LibreOffice가 없어 **PDF는 기본 생성되지 않습니다** (`pdfAvailable: false`, `pdfError`는 변환을 시도하지 않은 경우 `null`). PPT·마크다운은 동일하게 받을 수 있습니다. PDF가 필요하면 **로컬 Express** 또는 **Docker**(Impress 포함 이미지)를 쓰는 것을 권장합니다. 실험적으로 `ENABLE_PDF_ON_VERCEL=1`을 켜면 서버리스에서도 변환을 시도할 수 있으나(용량·콜드 스타트·타임아웃) 운영 난이도가 큽니다. PDF를 끄려면 `SKIP_PDF=1`을 사용합니다.
+1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
+2. 환경 변수: `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·ZIP에는 `GITHUB_TOKEN` 권장)
+3. `VERCEL=1` 환경에서는 기본적으로 **ZIP**으로 소스 수집
+4. LibreOffice 없음 → **PDF 기본 비활성** (`pdfAvailable: false`, `pdfNote`로 안내). PPTX·마크다운은 동일
+5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
 
-함수 실행 시간·용량 제한 때문에 **작은 공개 저장소** 위주로 사용하는 것이 안전합니다.
+실험적 PDF: `ENABLE_PDF_ON_VERCEL=1` (실패·타임아웃 가능). 끄기: `SKIP_PDF=1`.
 
 ---
 
-## 깃허브에 올리기 전 확인
+## API
+
+로컬·Vercel 모두 `/api/*` POST (JSON). 로컬 개발 시 Vite가 `8787`로 프록시합니다.
+
+| 경로 | Body | 응답 요약 |
+|------|------|-----------|
+| `POST /api/analyze-repo` | `{ "url": "https://github.com/owner/repo" }` | `{ "metadata" }` |
+| `POST /api/generate-spec` | `{ "metadata": { ... } }` | `{ "techSpecMarkdown", "readmeMarkdown" }` |
+| `POST /api/generate-slides` | `{ "techSpecMarkdown", "repoUrl", "readmeMarkdown"? }` | `{ "slideDeck", "pptxBase64", "pdfBase64", "pdfAvailable", "pdfError", "pdfNote" }` |
+| `POST /api/export-files` | `{ "readmeMarkdown", "techSpecMarkdown", "pptxBase64", "pdfBase64"? }` | ZIP 바이너리 (`presentation-bundle.zip`) |
+
+프론트 파이프라인: [`src/store/pipelineStore.ts`](src/store/pipelineStore.ts) — 위 순서로 자동 호출.
+
+---
+
+## 커밋·배포 전 확인
 
 ```bash
 npm run typecheck
@@ -209,11 +254,6 @@ npm run build
 
 ---
 
-## API 엔드포인트
+## 라이선스
 
-| 경로 | 설명 |
-|------|------|
-| `POST /api/analyze-repo` | body: `{ "url": "https://github.com/owner/repo" }` |
-| `POST /api/generate-spec` | body: `{ "metadata": {...} }` — 인스트럭션은 서버가 `INSTRUCTION_FILE` 또는 `reference/instruction.md`에서 읽음 |
-| `POST /api/generate-slides` | body: `{ "techSpecMarkdown": "...", "repoUrl": "..." }` — 응답에 `slideDeck`, `pptxBase64`, `pdfBase64`, `pdfAvailable`, `pdfError`(변환 실패 시 안내 문구, 미시도 시 `null`) 포함 |
-| `POST /api/export-files` | body: readme / techSpec / pptx base64 (+ optional pdf) → ZIP |
+저장소 루트에 별도 라이선스 파일이 없으면, 배포·재배포 전 저장소 소유자 정책을 확인하세요.

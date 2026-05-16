@@ -53,7 +53,7 @@ export function HomePage() {
             </span>
           </motion.h1>
           <p className="mx-auto max-w-3xl text-pretty text-slate-400">
-            GitHub 저장소 URL 하나로 분석, 기술명세서, 슬라이드(PPT/PDF)까지 자동 생성하는 MVP입니다.
+            GitHub 저장소 URL 하나로 분석, 기술명세서, 슬라이드(PPT/PDF)까지 자동 생성합니다.
           </p>
         </header>
 
