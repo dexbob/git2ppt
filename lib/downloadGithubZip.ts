@@ -16,7 +16,7 @@ export async function downloadGithubRepoZip(parsed: ParsedGithubRepo): Promise<Z
   const token = process.env.GITHUB_TOKEN?.trim();
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'goorm-git-repo-presentation-generator',
+    'User-Agent': 'git2ppt',
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 

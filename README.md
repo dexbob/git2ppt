@@ -105,7 +105,7 @@ npm run dev
 
 ### PDF 생성 (로컬 / Express)
 
-로컬 API(`server/local.ts`)는 PPTX 생성 후 **LibreOffice headless**(`soffice`)로 `slides.pdf`를 만듭니다. 바이너리가 없거나 변환이 실패하면 PPTX는 그대로 내려가고, 응답 필드 `pdfError`와 UI 안내 문구로 이유를 알 수 있습니다. 서버 콘솔에는 `[grpg] LibreOffice PDF 변환 실패` 로그가 남습니다.
+로컬 API(`server/local.ts`)는 PPTX 생성 후 **LibreOffice headless**(`soffice`)로 `slides.pdf`를 만듭니다. 바이너리가 없거나 변환이 실패하면 PPTX는 그대로 내려가고, 응답 필드 `pdfError`와 UI 안내 문구로 이유를 알 수 있습니다. 서버 콘솔에는 `[git2ppt] LibreOffice PDF 변환 실패` 로그가 남습니다.
 
 #### Ubuntu / Debian / WSL에 LibreOffice 설치
 

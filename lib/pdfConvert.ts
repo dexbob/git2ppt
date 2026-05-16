@@ -37,7 +37,7 @@ function describePdfFailure(err: unknown): string {
  */
 export async function convertPptxBufferToPdf(pptxBuffer: Buffer): Promise<PptxToPdfResult> {
   const soffice = process.env.SOFFICE_PATH?.trim() || 'soffice';
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'grpg-pdf-'));
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git2ppt-pdf-'));
   const pptxPath = path.join(tmp, 'slides.pptx');
   await fs.writeFile(pptxPath, pptxBuffer);
   try {
@@ -62,7 +62,7 @@ export async function convertPptxBufferToPdf(pptxBuffer: Buffer): Promise<PptxTo
   } catch (err) {
     const stderr = stderrFromExecError(err);
     // eslint-disable-next-line no-console
-    console.warn('[grpg] LibreOffice PDF 변환 실패:', err instanceof Error ? err.message : err, stderr || '');
+    console.warn('[git2ppt] LibreOffice PDF 변환 실패:', err instanceof Error ? err.message : err, stderr || '');
     return { pdf: null, error: describePdfFailure(err) };
   } finally {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
