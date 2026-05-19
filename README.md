@@ -5,8 +5,22 @@
 | | |
 |---|---|
 | npm 패키지명 | `git2ppt` |
-| 버전 | `1.0.0` |
+| 버전 | `1.1.0` |
 | Node.js | 20+ |
+
+---
+
+## 변경 이력
+
+### 1.1.0
+
+- **문서 미리보기** — 생성된 `tech_spec.md`·`README.md`를 탭으로 화면에서 확인 (`DocumentPreview`). 다운로드 전 본문 검토 가능.
+- **탐지 요약 JSON 제거** — UI에서 raw `metadata.detected` 표시를 없애고, 기술명세 생성 중에는 스택 칩(React, Express 등)만 간단히 표시.
+- **경량 마크다운 렌더러** — 외부 MD 라이브러리 없이 제목·목록·코드 블록·링크 등 기본 서식 미리보기 (`src/utils/simpleMarkdown.tsx`).
+
+### 1.0.0
+
+- GitHub URL 입력 → Clone/스캔 → 기술명세·README → PPT/PDF 생성 및 ZIP 다운로드.
 
 ---
 
@@ -23,14 +37,15 @@ LLM은 **Gemini 또는 OpenAI**만 지원합니다(`LLM_PROVIDER=auto`일 때 `G
 ### 사용자 플로우
 
 ```text
-GitHub URL 입력 → Clone/스캔 → 기술명세서 → 슬라이드/PPT → README·tech_spec·PPT·PDF(가능 시)·ZIP 다운로드
+GitHub URL 입력 → Clone/스캔 → 기술명세서 → 문서 미리보기 → 슬라이드/PPT → README·tech_spec·PPT·PDF(가능 시)·ZIP 다운로드
 ```
 
 ### UI
 
 - 단일 페이지, 다크 톤 (`src/pages/HomePage.tsx`)
 - 진행 단계: **Clone / 스캔** → **기술명세서** → **슬라이드 / PPT** → **완료**
-- 생성된 슬라이드 구조 **미리보기** (`SlidePreview`)
+- **문서 미리보기** — `기술명세서` / `README` 탭으로 생성 마크다운 본문 확인 (`DocumentPreview`). 기술명세 생성 중에는 로딩과 탐지된 스택 칩 표시.
+- **슬라이드 목차** — 생성된 슬라이드 제목 목록 (`SlidePreview`)
 - 개별 다운로드: `README.md`, `tech_spec.md`, `slides.pptx`, `slides.pdf`(가능 시), **ZIP 일괄** (`presentation-bundle.zip`)
 - PDF 미제공·변환 실패 시 `pdfNote` / `pdfError` 안내
 
@@ -66,6 +81,8 @@ GitHub URL 입력 → Clone/스캔 → 기술명세서 → 슬라이드/PPT → 
 | 경로 | 역할 |
 |------|------|
 | `src/` | React UI (페이지, 컴포넌트, Zustand 스토어) |
+| `src/components/DocumentPreview.tsx` | 기술명세·README 탭 미리보기 |
+| `src/utils/simpleMarkdown.tsx` | 경량 마크다운 렌더러 |
 | `lib/` | GitHub 분석, LLM, PPTX/PDF, ZIP |
 | `server/local.ts` | 로컬 Express API + (선택) `dist` 정적 서빙 |
 | `api/` | Vercel 핸들러 (`analyze-repo`, `generate-spec`, `generate-slides`, `export-files`) |
@@ -251,6 +268,8 @@ docker compose up --build
 npm run typecheck
 npm run build
 ```
+
+기능 추가·수정 후에는 [`package.json`](package.json)의 `version`을 올리고, [변경 이력](#변경-이력)에 요약을 남기는 것을 권장합니다. 패치(`1.1.x`)는 버그 수정, 마이너(`1.x.0`)는 UI·기능 추가, 메이저(`x.0.0`)는 호환성이 깨지는 변경에 사용합니다.
 
 ---
 

@@ -1,4 +1,5 @@
 import type { RepositoryMetadata } from './types.js';
+import { JSON_RESPONSE_ERROR } from './formatUserFacingError.js';
 import { completeJsonText } from './llmCompleteJson.js';
 
 export type GenerateSpecResult = {
@@ -35,7 +36,7 @@ Output MUST be valid JSON with exactly two string fields: "tech_spec_md" and "re
   try {
     parsed = JSON.parse(raw) as { tech_spec_md?: string; readme_md?: string };
   } catch {
-    throw new Error('기술명세서 생성 실패: JSON 파싱 오류');
+    throw new Error(JSON_RESPONSE_ERROR);
   }
   if (!parsed.tech_spec_md || !parsed.readme_md) {
     throw new Error('기술명세서 생성 실패: 필드 누락');

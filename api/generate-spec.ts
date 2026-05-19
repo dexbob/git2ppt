@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { RepositoryMetadata } from '../lib/types.js';
+import { formatUserFacingError } from '../lib/formatUserFacingError.js';
 import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
 import { loadInstructionFromFile } from '../lib/instructionFile.js';
 
@@ -31,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
     res.status(200).json({ techSpecMarkdown, readmeMarkdown });
   } catch (err) {
-    const message = err instanceof Error ? err.message : '기술명세서 생성에 실패했습니다.';
+    const message = formatUserFacingError(err, '기술명세서 생성에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 }

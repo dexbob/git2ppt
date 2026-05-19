@@ -1,4 +1,5 @@
 import type { SlideDeckSpec } from './types.js';
+import { JSON_RESPONSE_ERROR } from './formatUserFacingError.js';
 import { completeJsonText } from './llmCompleteJson.js';
 import { applyReadmeToCoverSlide, normalizeClosingSlide } from './readmeCoverHints.js';
 
@@ -44,7 +45,7 @@ Top-level object: { "slides": SlideSpec[] }`;
   try {
     parsed = JSON.parse(raw) as SlideDeckSpec;
   } catch {
-    throw new Error('슬라이드 생성 실패: JSON 파싱 오류');
+    throw new Error(JSON_RESPONSE_ERROR);
   }
   if (!parsed.slides || !Array.isArray(parsed.slides) || parsed.slides.length < 3) {
     throw new Error('슬라이드 생성 실패: 슬라이드 배열이 비정상입니다.');

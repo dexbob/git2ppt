@@ -20,6 +20,7 @@ import {
   type ExportBundle,
 } from '../lib/exportZip.js';
 import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
+import { formatUserFacingError } from '../lib/formatUserFacingError.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 8787);
@@ -59,7 +60,7 @@ app.post('/api/generate-spec', async (req, res) => {
     const out = await generateSpecWithOpenAI(metadata, instruction);
     res.json(out);
   } catch (err) {
-    const message = err instanceof Error ? err.message : '기술명세서 생성에 실패했습니다.';
+    const message = formatUserFacingError(err, '기술명세서 생성에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 });
@@ -100,7 +101,7 @@ app.post('/api/generate-slides', async (req, res) => {
       pdfNote,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : '슬라이드 생성에 실패했습니다.';
+    const message = formatUserFacingError(err, '슬라이드 생성에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 });

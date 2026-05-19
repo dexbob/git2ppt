@@ -17,21 +17,20 @@ function slideTitle(slide: SlideDeckSpec['slides'][number]): string {
 
 type Props = {
   deck: SlideDeckSpec | null;
+  /** 슬라이드 생성이 끝난 뒤에만 목차를 표시 */
+  ready?: boolean;
 };
 
-export function SlidePreview({ deck }: Props) {
-  if (!deck?.slides?.length) {
-    return (
-      <section className="w-full rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-6 text-center text-sm text-slate-500">
-        슬라이드 미리보기는 생성 완료 후 표시됩니다.
-      </section>
-    );
-  }
+export function SlidePreview({ deck, ready = true }: Props) {
+  if (!ready || !deck?.slides?.length) return null;
 
   return (
     <section className="w-full space-y-3">
-      <h2 className="text-lg font-semibold text-slate-100">슬라이드 목차</h2>
-      <ol className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-slate-100">슬라이드 목차</h2>
+        <span className="text-xs text-slate-500">총 {deck.slides.length}장</span>
+      </div>
+      <ol className="space-y-2 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
         {deck.slides.map((s, i) => (
           <li key={i} className="flex gap-3 text-sm text-slate-300">
             <span className="w-6 shrink-0 font-mono text-xs text-accent-cyan">{i + 1}</span>

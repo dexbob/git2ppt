@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { formatUserFacingError } from '@lib/formatUserFacingError';
 import type { RepositoryMetadata, SlideDeckSpec } from '@lib/types';
 
 export type PipelineStep =
@@ -60,8 +61,24 @@ export const usePipelineStore = create<State>((set, get) => ({
   setRepoUrl: (v) => set({ repoUrl: v }),
   reset: () => set({ ...initial }),
   runPipeline: async () => {
-    const { repoUrl } = get();
-    set({ step: 'analyzing', error: null, pdfError: null, pdfNote: null });
+    const { repoUrl, step } = get();
+    if (step === 'analyzing' || step === 'spec' || step === 'slides') {
+      return;
+    }
+    if (!repoUrl.trim()) return;
+    set({
+      step: 'analyzing',
+      error: null,
+      pdfError: null,
+      pdfNote: null,
+      metadata: null,
+      techSpecMarkdown: null,
+      readmeMarkdown: null,
+      slideDeck: null,
+      pptxBase64: null,
+      pdfBase64: null,
+      pdfAvailable: false,
+    });
     try {
       const { metadata } = await postJson<{ metadata: RepositoryMetadata }>('/api/analyze-repo', {
         url: repoUrl.trim(),
@@ -102,7 +119,7 @@ export const usePipelineStore = create<State>((set, get) => ({
     } catch (e) {
       set({
         step: 'error',
-        error: e instanceof Error ? e.message : '알 수 없는 오류',
+        error: formatUserFacingError(e, '알 수 없는 오류가 발생했습니다.'),
       });
     }
   },

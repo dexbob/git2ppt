@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Github } from 'lucide-react';
 import { AnalysisProgress } from '../components/AnalysisProgress';
+import { DocumentPreview } from '../components/DocumentPreview';
 import { RepositoryInput } from '../components/RepositoryInput';
 import { ResultDownloadCard } from '../components/ResultDownloadCard';
 import { SlidePreview } from '../components/SlidePreview';
@@ -68,21 +69,30 @@ export function HomePage() {
           {step !== 'idle' && <AnalysisProgress step={step} />}
 
           {error && (
-            <div className="w-full break-words rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
-              {error}
+            <div className="w-full space-y-3 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
+              <p className="break-words">{error}</p>
+              {step === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => void runPipeline()}
+                  className="rounded-lg border border-red-400/40 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:bg-red-900/60"
+                >
+                  다시 시도
+                </button>
+              )}
             </div>
           )}
 
-          {metadata && (
-            <section className="w-full space-y-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">탐지 요약</h2>
-              <pre className="max-h-64 overflow-auto text-xs text-slate-300">
-                {JSON.stringify(metadata.detected, null, 2)}
-              </pre>
-            </section>
+          {(step === 'spec' || step === 'slides' || step === 'done') && (
+            <DocumentPreview
+              readme={readmeMarkdown}
+              techSpec={techSpecMarkdown}
+              loading={step === 'spec'}
+              detected={metadata?.detected}
+            />
           )}
 
-          <SlidePreview deck={slideDeck} />
+          <SlidePreview deck={slideDeck} ready={step === 'done'} />
 
           {step === 'done' && (
             <ResultDownloadCard

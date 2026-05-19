@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { formatUserFacingError } from './formatUserFacingError.js';
 import { resolveLlmBackend } from './llmProvider.js';
 
 function stripJsonFences(raw: string): string {
@@ -17,15 +18,20 @@ async function completeJsonOpenAI(params: {
   if (!key) throw new Error('OPENAI_API_KEY가 설정되어 있지 않습니다.');
   const client = new OpenAI({ apiKey: key });
   const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4o';
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: params.temperature,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: params.system },
-      { role: 'user', content: params.user },
-    ],
-  });
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model,
+      temperature: params.temperature,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: params.system },
+        { role: 'user', content: params.user },
+      ],
+    });
+  } catch (err) {
+    throw new Error(formatUserFacingError(err, 'OpenAI 요청에 실패했습니다.'));
+  }
   const raw = completion.choices[0]?.message?.content?.trim();
   if (!raw) throw new Error('LLM 응답이 비어 있습니다.');
   return stripJsonFences(raw);
@@ -44,13 +50,18 @@ async function completeJsonGemini(params: {
     model: modelName,
     systemInstruction: params.system,
   });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: params.user }] }],
-    generationConfig: {
-      temperature: params.temperature,
-      responseMimeType: 'application/json',
-    },
-  });
+  let result;
+  try {
+    result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: params.user }] }],
+      generationConfig: {
+        temperature: params.temperature,
+        responseMimeType: 'application/json',
+      },
+    });
+  } catch (err) {
+    throw new Error(formatUserFacingError(err, 'Gemini 요청에 실패했습니다.'));
+  }
   const raw = result.response.text()?.trim();
   if (!raw) throw new Error('LLM 응답이 비어 있습니다.');
   return stripJsonFences(raw);

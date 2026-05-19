@@ -4,6 +4,7 @@ import { buildPptxBuffer } from '../lib/buildPptx.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import { bufferToBase64 } from '../lib/exportZip.js';
 import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
+import { formatUserFacingError } from '../lib/formatUserFacingError.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pdfNote,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : '슬라이드 생성에 실패했습니다.';
+    const message = formatUserFacingError(err, '슬라이드 생성에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 }
