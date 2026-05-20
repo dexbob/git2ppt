@@ -4,6 +4,7 @@ import { AnalysisProgress } from '../components/AnalysisProgress';
 import { DocumentPreview } from '../components/DocumentPreview';
 import { RepositoryInput } from '../components/RepositoryInput';
 import { ResultDownloadCard } from '../components/ResultDownloadCard';
+import { Footer } from '../components/Footer';
 import { SlidePreview } from '../components/SlidePreview';
 import { usePipelineStore } from '../store/pipelineStore';
 
@@ -29,9 +30,9 @@ export function HomePage() {
   const busy = step === 'analyzing' || step === 'spec' || step === 'slides';
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(124,58,237,0.18),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.15),transparent_40%)]" />
-      <main className="relative mx-auto flex max-w-5xl flex-col gap-12 px-4 py-16 sm:px-8">
+      <main className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 px-4 py-16 sm:px-8">
         <header className="space-y-4 text-center">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -118,6 +119,8 @@ export function HomePage() {
             </button>
           </div>
         )}
+
+        <Footer />
       </main>
     </div>
   );

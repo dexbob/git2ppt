@@ -5,12 +5,17 @@
 | | |
 |---|---|
 | npm 패키지명 | `git2ppt` |
-| 버전 | `1.1.0` |
+| 버전 | `1.2.0` |
 | Node.js | 20+ |
 
 ---
 
 ## 변경 이력
+
+### 1.2.0
+
+- **Dexter Lab. 푸터** — GitHub 스타일 ©·네비게이션(Repository, Issues, README, Docs), 본문 `max-w-3xl` 폭에 맞춤.
+- **브랜드 마크** — 흰 둥근 사각형 + 에rlenmeyer 플라스크 뚫림 SVG (`public/brand/dexter-lab-mark.svg`), favicon 연동.
 
 ### 1.1.0
 

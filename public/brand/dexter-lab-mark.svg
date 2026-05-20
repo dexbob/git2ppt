@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Dexter Lab.">
+  <defs>
+    <clipPath id="badge-inner">
+      <rect x="2" y="2" width="28" height="28" rx="7" />
+    </clipPath>
+    <mask id="dl-cutout">
+      <rect width="32" height="32" fill="white" />
+      <g clip-path="url(#badge-inner)">
+        <!-- Erlenmeyer flask: scaled up, lowered so rim stays inside badge -->
+        <g transform="translate(16 16.75) scale(1.22) translate(-16 -15.5)">
+          <path
+            d="M12.5 7.45H19.5V8.35H18.5V12.35L22.88 24.05Q23.02 24.72 22.38 24.72H9.62Q8.98 24.72 9.12 24.05L13.5 12.35V8.35H12.5V7.45Z"
+            fill="black"
+          />
+          <rect x="19.05" y="13.35" width="2.5" height="0.32" rx="0.06" fill="black" />
+          <rect x="19.05" y="15.65" width="2.25" height="0.32" rx="0.06" fill="black" />
+          <rect x="19.05" y="17.95" width="2" height="0.32" rx="0.06" fill="black" />
+        </g>
+      </g>
+    </mask>
+  </defs>
+  <rect x="2" y="2" width="28" height="28" rx="7" fill="#ffffff" mask="url(#dl-cutout)" />
+</svg>
