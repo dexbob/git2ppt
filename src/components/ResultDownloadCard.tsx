@@ -30,7 +30,7 @@ export function ResultDownloadCard({
   const pdfUnavailableHint =
     pdfNote ||
     (!pdfAvailable && !pdfError
-      ? 'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev`)·Docker로 실행하거나, 환경 변수 ENABLE_PDF_ON_VERCEL을 확인하세요.'
+      ? 'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev` 또는 `./start_server.sh`)로 실행하거나, 환경 변수 ENABLE_PDF_ON_VERCEL을 확인하세요.'
       : null);
 
   async function onZip() {
