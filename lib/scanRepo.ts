@@ -280,6 +280,8 @@ export async function scanRepository(
   return {
     repoUrl,
     parsed,
+    ownerDisplayName: null,
+    githubTopics: [],
     defaultBranch,
     directoryTreeSample: tree,
     priorityFileSummaries,

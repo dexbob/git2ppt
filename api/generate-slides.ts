@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateSlideDeckSpec } from '../lib/generateSlides.js';
 import { buildPptxBuffer } from '../lib/buildPptx.js';
+import { coverTagsFromSignals } from '../lib/coverTags.js';
+import type { DetectedSignals } from '../lib/types.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import { bufferToBase64 } from '../lib/exportZip.js';
 import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
@@ -25,6 +27,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const techSpecMarkdown = body?.techSpecMarkdown as string | undefined;
     const repoUrl = body?.repoUrl as string | undefined;
     const readmeMarkdown = body?.readmeMarkdown as string | undefined;
+    const ownerDisplayName = body?.ownerDisplayName as string | null | undefined;
+    const detected = body?.detected as DetectedSignals | undefined;
+    const githubTopics = body?.githubTopics as string[] | undefined;
     if (!techSpecMarkdown?.trim() || !repoUrl?.trim()) {
       res.status(400).json({ error: 'techSpecMarkdown와 repoUrl이 필요합니다.' });
       return;
@@ -35,7 +40,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       repoUrl.trim(),
       readmeMarkdown,
     );
-    const pptxBuffer = await buildPptxBuffer(slideDeck);
+    const coverTags =
+      detected != null
+        ? coverTagsFromSignals(detected, Array.isArray(githubTopics) ? githubTopics : [])
+        : [];
+    const pptxBuffer = await buildPptxBuffer(slideDeck, {
+      ownerDisplayName: ownerDisplayName ?? null,
+      coverTags,
+    });
 
     const skipPdf =
       process.env.SKIP_PDF === '1' || (process.env.VERCEL === '1' && process.env.ENABLE_PDF_ON_VERCEL !== '1');

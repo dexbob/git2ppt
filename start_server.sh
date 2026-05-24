@@ -47,7 +47,7 @@ hint_from_log_if_missing_deps() {
   fi
 }
 
-# 사용법:
+# 사용법 (반드시 ./ 로 실행 — source 하지 말 것):
 #   ./start_server.sh local     # 로컬 개발 (HMR, 5173)
 #   ./start_server.sh           # 외부(Tailscale) 노출 (빌드 + 정적 서빙, 8787)
 require_deps

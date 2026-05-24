@@ -6,7 +6,8 @@ import cors from 'cors';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-import type { RepositoryMetadata } from '../lib/types.js';
+import type { DetectedSignals, RepositoryMetadata } from '../lib/types.js';
+import { coverTagsFromSignals } from '../lib/coverTags.js';
 import { analyzeGithubRepository } from '../lib/analyzeRepo.js';
 import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
 import { loadInstructionFromFile } from '../lib/instructionFile.js';
@@ -70,6 +71,9 @@ app.post('/api/generate-slides', async (req, res) => {
     const techSpecMarkdown = req.body?.techSpecMarkdown as string | undefined;
     const repoUrl = req.body?.repoUrl as string | undefined;
     const readmeMarkdown = req.body?.readmeMarkdown as string | undefined;
+    const ownerDisplayName = req.body?.ownerDisplayName as string | null | undefined;
+    const detected = req.body?.detected as DetectedSignals | undefined;
+    const githubTopics = req.body?.githubTopics as string[] | undefined;
     if (!techSpecMarkdown?.trim() || !repoUrl?.trim()) {
       res.status(400).json({ error: 'techSpecMarkdown와 repoUrl이 필요합니다.' });
       return;
@@ -79,7 +83,14 @@ app.post('/api/generate-slides', async (req, res) => {
       repoUrl.trim(),
       readmeMarkdown,
     );
-    const pptxBuffer = await buildPptxBuffer(slideDeck);
+    const coverTags =
+      detected != null
+        ? coverTagsFromSignals(detected, Array.isArray(githubTopics) ? githubTopics : [])
+        : [];
+    const pptxBuffer = await buildPptxBuffer(slideDeck, {
+      ownerDisplayName: ownerDisplayName ?? null,
+      coverTags,
+    });
     const skipPdf = process.env.SKIP_PDF === '1';
     let pdfBuffer: Buffer | null = null;
     let pdfError: string | null = null;

@@ -25,6 +25,10 @@ export type DetectedSignals = {
 export type RepositoryMetadata = {
   repoUrl: string;
   parsed: ParsedGithubRepo;
+  /** GitHub 프로필/조직 Name(표시 이름). API 미제공·미설정 시 null */
+  ownerDisplayName: string | null;
+  /** GitHub 저장소 topics (API) */
+  githubTopics: string[];
   defaultBranch: string;
   directoryTreeSample: string;
   priorityFileSummaries: PriorityFileSummary[];

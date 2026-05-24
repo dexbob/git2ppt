@@ -106,6 +106,9 @@ export const usePipelineStore = create<State>((set, get) => ({
         techSpecMarkdown: specRes.techSpecMarkdown,
         repoUrl: metadata.repoUrl,
         readmeMarkdown: specRes.readmeMarkdown,
+        ownerDisplayName: metadata.ownerDisplayName,
+        detected: metadata.detected,
+        githubTopics: metadata.githubTopics,
       });
       set({
         slideDeck: slidesRes.slideDeck,

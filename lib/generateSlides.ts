@@ -21,7 +21,7 @@ For type "closing" (final slide): this slide is the deck wrap-up and MUST NOT re
 
 CRITICAL: Every slide must reflect ONLY the provided repository URL and the technical specification markdown below. Do not invent product features, stack items, or domain content that are not clearly supported by that tech spec. Do not reuse wording from unrelated sample documents.
 
-When a README excerpt is provided below, the cover slide projectName and tagline MUST match that README: projectName = the first markdown H1 title line (without the leading #), tagline = the first substantive paragraph after that title (one or two sentences, under 200 characters if possible).`;
+When a README excerpt is provided below, the cover slide projectName and tagline MUST match that README: projectName = the first markdown H1 title line (without the leading #), tagline = the first substantive plain-text paragraph after that title (one or two sentences, under 200 characters if possible). tagline MUST be plain text only: no HTML tags, no markdown images, no raw URLs as the whole line.`;
 
 export async function generateSlideDeckSpec(
   techSpecMarkdown: string,

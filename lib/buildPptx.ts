@@ -34,6 +34,39 @@ function githubOwnerFromUrl(repoUrl: string): string {
   return '';
 }
 
+/**
+ * PowerPoint·LibreOffice가 github.com/... 를 자동 하이퍼링크로 잡는 것을 막기 위한 표시용 문자열.
+ * 보이는 글자는 동일하고, 점·슬래시 뒤에 zero-width space를 넣는다.
+ */
+function plainTextNoAutoLink(s: string): string {
+  return s.replace(/\./g, '.\u200B').replace(/\//g, '/\u200B');
+}
+
+/** 푸터용 비링크 짧은 저장소 주소 (예: github.com/owner/repo) */
+function shortFooterRepoLabel(repoUrl: string): string {
+  const raw = repoUrl.trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./, '');
+    const path = u.pathname.replace(/^\//, '').replace(/\/$/, '');
+    return path ? `${host}/${path}` : host;
+  } catch {
+    return raw.length > 52 ? `${raw.slice(0, 49)}…` : raw;
+  }
+}
+
+function normalizeRepoHyperlink(repoUrl: string): string {
+  const raw = repoUrl.trim();
+  if (!raw) return raw;
+  try {
+    const u = new URL(raw);
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return raw;
+  }
+}
+
 function shortFooterRight(projectName: string, max = 24): string {
   const t = projectName.replace(/\s+/g, ' ').trim();
   if (!t) return 'GIT · SPEC · SLIDE';
@@ -60,7 +93,7 @@ function addFooter(
     fill: { color: RULE },
     line: { color: RULE, width: 0 },
   });
-  slide.addText(left, {
+  slide.addText(plainTextNoAutoLink(left), {
     x: XM,
     y: 5.12,
     w: 4.45,
@@ -68,6 +101,7 @@ function addFooter(
     fontSize: leftFs,
     color: MUTED,
     fontFace: FONT,
+    underline: { style: 'none' },
   });
   slide.addText(right, {
     x: 4.85,
@@ -121,11 +155,99 @@ function addHeaderBand(
   });
 }
 
+/** 한 줄 텍스트 박스 크기 (하이퍼링크 클릭 영역을 글자 크기에 가깝게) */
+function estimateSingleLineTextBox(text: string, fontSizePt: number): { w: number; h: number } {
+  let charUnits = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    charUnits += cp > 0x7f ? 1.75 : 1;
+  }
+  const w = Math.min(WM, Math.max(0.85, charUnits * (fontSizePt / 72) * 0.095));
+  const h = Math.max(0.26, (fontSizePt / 72) * 1.35);
+  return { w, h };
+}
+
+const COVER_TAG_FS = 9.5;
+const COVER_TAG_GAP = 0.05;
+const COVER_TAG_ROW_H = 0.28;
+const COVER_TAG_ROW_GAP = 0.04;
+const COVER_TAG_MAX_ROWS = 2;
+
+/** 설명과 동일 가로폭(WM) 안에서 태그 줄 수·높이 계산 */
+function measureCoverTagsHeight(tags: string[]): number {
+  if (!tags.length) return 0;
+  const maxX = XM + WM;
+  let x = XM;
+  let rows = 1;
+
+  for (const tag of tags) {
+    const w = estimateSingleLineTextBox(tag, COVER_TAG_FS).w;
+    if (x + w > maxX && x > XM) {
+      rows += 1;
+      if (rows > COVER_TAG_MAX_ROWS) break;
+      x = XM;
+    }
+    if (x + w > maxX) continue;
+    x += w + COVER_TAG_GAP;
+  }
+
+  return rows * COVER_TAG_ROW_H + (rows > 1 ? (rows - 1) * COVER_TAG_ROW_GAP : 0);
+}
+
+/** 표지 #태그: 설명 폭(WM) 안에서 가로 배치, 넘치면 다음 줄(최대 2줄) */
+function addCoverTagsRow(
+  slide: ReturnType<PptxGenJS['addSlide']>,
+  tags: string[],
+  y: number,
+): number {
+  if (!tags.length) return y;
+  const maxX = XM + WM;
+  let x = XM;
+  let rowY = y;
+  let rows = 1;
+
+  for (const tag of tags) {
+    const w = estimateSingleLineTextBox(tag, COVER_TAG_FS).w;
+    if (x + w > maxX && x > XM) {
+      rows += 1;
+      if (rows > COVER_TAG_MAX_ROWS) break;
+      rowY += COVER_TAG_ROW_H + COVER_TAG_ROW_GAP;
+      x = XM;
+    }
+    if (x + w > maxX) continue;
+
+    slide.addText(tag, {
+      x,
+      y: rowY,
+      w,
+      h: COVER_TAG_ROW_H,
+      fontSize: COVER_TAG_FS,
+      color: MUTED,
+      fontFace: FONT,
+      valign: 'middle',
+      wrap: false,
+    });
+    x += w + COVER_TAG_GAP;
+  }
+
+  return rowY + COVER_TAG_ROW_H;
+}
+
+/** 표지 작성자: @Name (GitHub Name 우선, 없으면 @login) */
+function resolveCoverPresenter(displayName: string | null | undefined, repoUrl: string): string {
+  const name = displayName?.trim();
+  if (name) return name.startsWith('@') ? name : `@${name}`;
+  const login = githubOwnerFromUrl(repoUrl);
+  return login ? `@${login}` : '';
+}
+
 function addCoverSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'cover' }>,
-  footerOwner: string,
+  footerRepoShort: string,
   footerRightShort: string,
+  presenterName: string,
+  coverTags: string[],
 ) {
   const slide = pptx.addSlide();
   slide.background = { color: BG };
@@ -144,12 +266,26 @@ function addCoverSlide(
   });
 
   const desc = s.tagline?.trim() ?? '';
-  const titleH = 1.05;
+  const repoLink = normalizeRepoHyperlink(s.repoUrl);
+  const urlFs = 12;
+  const urlBox = repoLink ? estimateSingleLineTextBox(repoLink, urlFs) : { w: 0, h: 0 };
+  const nameFs = 14;
+  const nameBox = presenterName ? estimateSingleLineTextBox(presenterName, nameFs) : { w: 0, h: 0 };
+  const hasTags = coverTags.length > 0;
+  const tagsBlockH = hasTags ? measureCoverTagsHeight(coverTags) : 0;
+  const titleH = 1.18;
+  const titleFs = 36;
   const descH = desc ? 1.18 : 0;
   const gapTitleDesc = desc ? 0.1 : 0;
-  const gapDescUrl = 0.1;
-  const urlH = 0.45;
-  const blockH = titleH + gapTitleDesc + descH + gapDescUrl + urlH;
+  const gapLine = 0.12;
+  const gapUrlTags = hasTags && repoLink ? 0.14 : 0;
+  const metaH =
+    (presenterName ? nameBox.h + (repoLink ? gapLine : 0) : 0) +
+    (repoLink ? urlBox.h : 0) +
+    gapUrlTags +
+    tagsBlockH;
+  const gapDescMeta = desc && (presenterName || repoLink || hasTags) ? gapLine : presenterName || repoLink || hasTags ? gapLine : 0.1;
+  const blockH = titleH + gapTitleDesc + descH + gapDescMeta + metaH;
 
   /** 푸터 위 가용 영역 안에서 블록을 세로 중앙보다 살짝 위에 둠 */
   const bandTop = gitY + gitH + 0.14;
@@ -165,7 +301,7 @@ function addCoverSlide(
     y: titleY,
     w: WM,
     h: titleH,
-    fontSize: 30,
+    fontSize: titleFs,
     bold: true,
     color: TEXT,
     fontFace: FONT,
@@ -173,12 +309,11 @@ function addCoverSlide(
     wrap: true,
   });
 
-  let urlTop = titleY + titleH + gapDescUrl;
+  let nextY = titleY + titleH + (desc ? gapTitleDesc : gapDescMeta);
   if (desc) {
-    const descY = titleY + titleH + gapTitleDesc;
     slide.addText(desc, {
       x: XM,
-      y: descY,
+      y: nextY,
       w: WM,
       h: descH,
       fontSize: 13,
@@ -187,21 +322,45 @@ function addCoverSlide(
       valign: 'top',
       wrap: true,
     });
-    urlTop = descY + descH + gapDescUrl;
+    nextY += descH + gapDescMeta;
   }
 
-  slide.addText(s.repoUrl, {
-    x: XM,
-    y: urlTop,
-    w: WM,
-    h: urlH,
-    fontSize: 12,
-    color: MUTED,
-    fontFace: FONT,
-    valign: 'top',
-  });
+  if (presenterName) {
+    slide.addText(presenterName, {
+      x: XM,
+      y: nextY,
+      w: nameBox.w,
+      h: nameBox.h,
+      fontSize: nameFs,
+      color: MUTED,
+      fontFace: FONT,
+      valign: 'top',
+      wrap: false,
+    });
+    nextY += nameBox.h + (repoLink || hasTags ? gapLine : 0);
+  }
 
-  addFooter(pptx, slide, footerOwner || 'GitHub', footerRightShort, {
+  if (repoLink) {
+    slide.addText(repoLink, {
+      x: XM,
+      y: nextY,
+      w: urlBox.w,
+      h: urlBox.h,
+      fontSize: urlFs,
+      color: ACCENT,
+      fontFace: FONT,
+      valign: 'top',
+      wrap: false,
+      hyperlink: { url: repoLink, tooltip: repoLink },
+    });
+    nextY += urlBox.h + (hasTags ? gapUrlTags : 0);
+  }
+
+  if (hasTags) {
+    addCoverTagsRow(slide, coverTags, nextY);
+  }
+
+  addFooter(pptx, slide, footerRepoShort || 'github.com', footerRightShort, {
     leftFontSize: 9,
     rightFontSize: 7,
   });
@@ -211,7 +370,7 @@ function addBulletsSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'bullets' }>,
   sectionTag: string,
-  footerOwner: string,
+  footerRepoShort: string,
   brandRight: string,
 ) {
   const slide = pptx.addSlide();
@@ -293,7 +452,7 @@ function addBulletsSlide(
     });
   }
 
-  addFooter(pptx, slide, footerOwner || 'GitHub', brandRight);
+  addFooter(pptx, slide, footerRepoShort || 'github.com', brandRight);
 }
 
 function addCardPanel(
@@ -351,7 +510,7 @@ function addCardsSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'cards' }>,
   sectionTag: string,
-  footerOwner: string,
+  footerRepoShort: string,
   brandRight: string,
 ) {
   const slide = pptx.addSlide();
@@ -402,14 +561,14 @@ function addCardsSlide(
     }
   }
 
-  addFooter(pptx, slide, footerOwner || 'GitHub', brandRight);
+  addFooter(pptx, slide, footerRepoShort || 'github.com', brandRight);
 }
 
 function addFlowSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'flow' }>,
   sectionTag: string,
-  footerOwner: string,
+  footerRepoShort: string,
   brandRight: string,
 ) {
   const slide = pptx.addSlide();
@@ -473,7 +632,7 @@ function addFlowSlide(
     drawRow(steps, 0, n, yTop, boxH);
   }
 
-  addFooter(pptx, slide, footerOwner || 'GitHub', brandRight);
+  addFooter(pptx, slide, footerRepoShort || 'github.com', brandRight);
 }
 
 const MONO_FONT = 'Courier New';
@@ -482,7 +641,7 @@ function addClosingSlide(
   pptx: PptxGenJS,
   s: Extract<SlideSpec, { type: 'closing' }>,
   sectionTag: string,
-  footerOwner: string,
+  footerRepoShort: string,
   brandRight: string,
 ) {
   const slide = pptx.addSlide();
@@ -495,11 +654,8 @@ function addClosingSlide(
     .slice(0, 3);
   const runCommand = (s.runCommand ?? '').trim();
 
-  /** 본문 가용 영역 (헤더 ~ repoUrl 위) */
   const bodyTop = 1.42;
-  const urlH = 0.45;
-  const urlReserve = urlH + 0.18;
-  const bodyBottom = CONTENT_MAX_Y - urlReserve;
+  const bodyBottom = CONTENT_MAX_Y;
 
   let y = bodyTop;
 
@@ -586,20 +742,7 @@ function addClosingSlide(
     y += codeH + 0.18;
   }
 
-  const urlY = Math.min(Math.max(y, bodyBottom + 0.04), CONTENT_MAX_Y - urlH);
-  slide.addText(s.repoUrl, {
-    x: XM,
-    y: urlY,
-    w: WM,
-    h: urlH,
-    fontSize: 12,
-    color: ACCENT,
-    fontFace: FONT,
-    valign: 'top',
-    wrap: true,
-  });
-
-  addFooter(pptx, slide, footerOwner || 'GitHub', brandRight);
+  addFooter(pptx, slide, footerRepoShort || 'github.com', brandRight);
 }
 
 function sectionLabelFor(type: SlideSpec['type'], index: number): string {
@@ -614,15 +757,29 @@ function sectionLabelFor(type: SlideSpec['type'], index: number): string {
   return map[type] ?? `${n} · 슬라이드`;
 }
 
-export async function buildPptxBuffer(spec: SlideDeckSpec): Promise<Buffer> {
+export type BuildPptxOptions = {
+  /** GitHub 프로필 Name. 없으면 표지에 @login 폴백 */
+  ownerDisplayName?: string | null;
+  /** 표지 #태그 줄 (예: #React #Docker) */
+  coverTags?: string[];
+};
+
+export async function buildPptxBuffer(
+  spec: SlideDeckSpec,
+  options?: BuildPptxOptions,
+): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
   pptx.author = 'Git Repository Presentation Generator';
   pptx.subject = 'Auto-generated deck';
 
   const cover = spec.slides.find((s): s is Extract<SlideSpec, { type: 'cover' }> => s.type === 'cover');
-  const footerOwner = cover ? githubOwnerFromUrl(cover.repoUrl) : '';
+  const footerRepoShort = cover ? shortFooterRepoLabel(cover.repoUrl) : '';
   const brandRight = cover ? shortFooterRight(cover.projectName) : 'GIT · SPEC · SLIDE';
+  const coverPresenter = cover
+    ? resolveCoverPresenter(options?.ownerDisplayName, cover.repoUrl)
+    : '';
+  const coverTags = options?.coverTags ?? [];
 
   let idx = 0;
   for (const s of spec.slides) {
@@ -631,19 +788,19 @@ export async function buildPptxBuffer(spec: SlideDeckSpec): Promise<Buffer> {
 
     switch (s.type) {
       case 'cover':
-        addCoverSlide(pptx, s, footerOwner, brandRight);
+        addCoverSlide(pptx, s, footerRepoShort, brandRight, coverPresenter, coverTags);
         break;
       case 'bullets':
-        addBulletsSlide(pptx, s, tag, footerOwner, brandRight);
+        addBulletsSlide(pptx, s, tag, footerRepoShort, brandRight);
         break;
       case 'cards':
-        addCardsSlide(pptx, s, tag, footerOwner, brandRight);
+        addCardsSlide(pptx, s, tag, footerRepoShort, brandRight);
         break;
       case 'flow':
-        addFlowSlide(pptx, s, tag, footerOwner, brandRight);
+        addFlowSlide(pptx, s, tag, footerRepoShort, brandRight);
         break;
       case 'closing':
-        addClosingSlide(pptx, s, tag, footerOwner, brandRight);
+        addClosingSlide(pptx, s, tag, footerRepoShort, brandRight);
         break;
       default:
         break;

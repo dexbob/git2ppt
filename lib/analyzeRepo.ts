@@ -1,8 +1,25 @@
-import type { RepositoryMetadata } from './types.js';
+import type { ParsedGithubRepo, RepositoryMetadata } from './types.js';
 import { parseGithubRepoUrl } from './github.js';
 import { cloneGithubRepo, removeCloneDir } from './cloneRepo.js';
 import { downloadGithubRepoZip } from './downloadGithubZip.js';
+import { fetchGithubRepoMeta } from './githubOwnerProfile.js';
 import { scanRepository } from './scanRepo.js';
+
+async function scanWithOwnerProfile(
+  repoDir: string,
+  repoUrl: string,
+  parsed: ParsedGithubRepo,
+): Promise<RepositoryMetadata> {
+  const [metadata, repoMeta] = await Promise.all([
+    scanRepository(repoDir, repoUrl, parsed),
+    fetchGithubRepoMeta(parsed),
+  ]);
+  return {
+    ...metadata,
+    ownerDisplayName: repoMeta.ownerDisplayName,
+    githubTopics: repoMeta.topics,
+  };
+}
 
 function useZipMode(): boolean {
   if (process.env.USE_GITHUB_ZIP === '1') return true;
@@ -19,7 +36,7 @@ export async function analyzeGithubRepository(repoUrl: string): Promise<Reposito
   if (useZipMode()) {
     const { repoDir, cleanupRoot } = await downloadGithubRepoZip(parsed);
     try {
-      return await scanRepository(repoDir, parsed.webUrl, parsed);
+      return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
     } finally {
       await removeCloneDir(cleanupRoot).catch(() => undefined);
     }
@@ -27,7 +44,7 @@ export async function analyzeGithubRepository(repoUrl: string): Promise<Reposito
 
   const { repoDir, cleanupRoot } = await cloneGithubRepo(parsed);
   try {
-    return await scanRepository(repoDir, parsed.webUrl, parsed);
+    return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
   } finally {
     await removeCloneDir(cleanupRoot).catch(() => undefined);
   }
