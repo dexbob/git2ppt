@@ -1,241 +1,110 @@
-import type { ReactNode } from 'react';
+import type { Components } from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
+/** GitHub README에서 흔한 HTML·정렬 속성 허용 */
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [...(defaultSchema.attributes?.div ?? []), 'align'],
+    p: [...(defaultSchema.attributes?.p ?? []), 'align'],
+    h1: [...(defaultSchema.attributes?.h1 ?? []), 'align'],
+    h2: [...(defaultSchema.attributes?.h2 ?? []), 'align'],
+    h3: [...(defaultSchema.attributes?.h3 ?? []), 'align'],
+    h4: [...(defaultSchema.attributes?.h4 ?? []), 'align'],
+    h5: [...(defaultSchema.attributes?.h5 ?? []), 'align'],
+    h6: [...(defaultSchema.attributes?.h6 ?? []), 'align'],
+    img: [...(defaultSchema.attributes?.img ?? []), 'width', 'height', 'align'],
+    table: [...(defaultSchema.attributes?.table ?? []), 'align', 'width'],
+    th: [...(defaultSchema.attributes?.th ?? []), 'align', 'width', 'colspan', 'rowspan'],
+    td: [...(defaultSchema.attributes?.td ?? []), 'align', 'width', 'colspan', 'rowspan'],
+    tr: [...(defaultSchema.attributes?.tr ?? []), 'align'],
+    a: [...(defaultSchema.attributes?.a ?? []), 'target', 'rel', 'title'],
+  },
+};
 
-function renderInline(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const pattern =
-    /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) {
-      nodes.push(text.slice(last, match.index));
-    }
-    if (match[2]) {
-      nodes.push(
-        <strong key={key++} className="font-semibold text-slate-100">
-          {match[2]}
-        </strong>,
+const markdownComponents: Components = {
+  img: ({ alt, ...props }) => (
+    // eslint-disable-next-line jsx-a11y/alt-text -- alt from README
+    <img
+      {...props}
+      alt={alt ?? ''}
+      className="my-2 inline-block max-w-full h-auto rounded"
+      loading="lazy"
+    />
+  ),
+  a: ({ href, children, ...props }) => (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="text-accent-cyan underline underline-offset-2 hover:text-accent-violet"
+    >
+      {children}
+    </a>
+  ),
+  table: ({ children, ...props }) => (
+    <div className="my-3 overflow-x-auto">
+      <table {...props} className="w-full border-collapse text-sm">
+        {children}
+      </table>
+    </div>
+  ),
+  th: ({ children, ...props }) => (
+    <th
+      {...props}
+      className="border border-slate-700 bg-slate-900/80 px-3 py-2 text-left font-semibold text-slate-200"
+    >
+      {children}
+    </th>
+  ),
+  td: ({ children, ...props }) => (
+    <td {...props} className="border border-slate-800 px-3 py-2 text-slate-300">
+      {children}
+    </td>
+  ),
+  pre: ({ children, ...props }) => (
+    <pre
+      {...props}
+      className="my-3 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300"
+    >
+      {children}
+    </pre>
+  ),
+  code: ({ className, children, ...props }) => {
+    const isBlock = Boolean(className);
+    if (isBlock) {
+      return (
+        <code {...props} className={className}>
+          {children}
+        </code>
       );
-    } else if (match[3]) {
-      nodes.push(
-        <em key={key++} className="italic text-slate-200">
-          {match[3]}
-        </em>,
-      );
-    } else if (match[4]) {
-      nodes.push(
-        <code
-          key={key++}
-          className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-accent-cyan"
-        >
-          {match[4]}
-        </code>,
-      );
-    } else if (match[5] && match[6]) {
-      nodes.push(
-        <a
-          key={key++}
-          href={match[6]}
-          target="_blank"
-          rel="noreferrer"
-          className="text-accent-cyan underline underline-offset-2 hover:text-accent-violet"
-        >
-          {match[5]}
-        </a>,
-      );
     }
-    last = match.index + match[0].length;
-  }
-
-  if (last < text.length) {
-    nodes.push(text.slice(last));
-  }
-  return nodes.length ? nodes : [text];
-}
-
-type Block =
-  | { kind: 'heading'; level: number; text: string }
-  | { kind: 'paragraph'; text: string }
-  | { kind: 'ul'; items: string[] }
-  | { kind: 'ol'; items: string[] }
-  | { kind: 'code'; lang: string; text: string }
-  | { kind: 'hr' };
-
-function parseBlocks(source: string): Block[] {
-  const lines = source.replace(/\r\n/g, '\n').split('\n');
-  const blocks: Block[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i]!;
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      i++;
-      continue;
-    }
-
-    if (trimmed.startsWith('```')) {
-      const lang = trimmed.slice(3).trim();
-      i++;
-      const codeLines: string[] = [];
-      while (i < lines.length && !lines[i]!.trim().startsWith('```')) {
-        codeLines.push(lines[i]!);
-        i++;
-      }
-      if (i < lines.length) i++;
-      blocks.push({ kind: 'code', lang, text: codeLines.join('\n') });
-      continue;
-    }
-
-    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      blocks.push({ kind: 'heading', level: heading[1]!.length, text: heading[2]!.trim() });
-      i++;
-      continue;
-    }
-
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      blocks.push({ kind: 'hr' });
-      i++;
-      continue;
-    }
-
-    if (/^[-*+]\s+/.test(trimmed)) {
-      const items: string[] = [];
-      while (i < lines.length && /^[-*+]\s+/.test(lines[i]!.trim())) {
-        items.push(lines[i]!.trim().replace(/^[-*+]\s+/, ''));
-        i++;
-      }
-      blocks.push({ kind: 'ul', items });
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(trimmed)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\.\s+/.test(lines[i]!.trim())) {
-        items.push(lines[i]!.trim().replace(/^\d+\.\s+/, ''));
-        i++;
-      }
-      blocks.push({ kind: 'ol', items });
-      continue;
-    }
-
-    const paraLines: string[] = [trimmed];
-    i++;
-    while (i < lines.length) {
-      const next = lines[i]!.trim();
-      if (
-        !next ||
-        next.startsWith('#') ||
-        next.startsWith('```') ||
-        /^[-*+]\s+/.test(next) ||
-        /^\d+\.\s+/.test(next) ||
-        /^(-{3,}|\*{3,}|_{3,})$/.test(next)
-      ) {
-        break;
-      }
-      paraLines.push(next);
-      i++;
-    }
-    blocks.push({ kind: 'paragraph', text: paraLines.join(' ') });
-  }
-
-  return blocks;
-}
-
-const HEADING_CLASS: Record<number, string> = {
-  1: 'text-2xl font-bold text-white mt-6 mb-3 first:mt-0',
-  2: 'text-xl font-bold text-slate-100 mt-5 mb-2 first:mt-0',
-  3: 'text-lg font-semibold text-slate-100 mt-4 mb-2 first:mt-0',
-  4: 'text-base font-semibold text-slate-200 mt-3 mb-1 first:mt-0',
-  5: 'text-sm font-semibold text-slate-200 mt-3 mb-1 first:mt-0',
-  6: 'text-sm font-medium text-slate-300 mt-2 mb-1 first:mt-0',
+    return (
+      <code
+        {...props}
+        className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-accent-cyan"
+      >
+        {children}
+      </code>
+    );
+  },
 };
 
 export function SimpleMarkdown({ source }: { source: string }) {
-  const blocks = parseBlocks(source);
-
   return (
-    <div className="space-y-3 text-sm leading-relaxed text-slate-300">
-      {blocks.map((block, idx) => {
-        switch (block.kind) {
-          case 'heading': {
-            const level = Math.min(block.level, 6);
-            const className = HEADING_CLASS[level] ?? HEADING_CLASS[6]!;
-            if (level === 1) {
-              return (
-                <h1 key={idx} className={className}>
-                  {renderInline(block.text)}
-                </h1>
-              );
-            }
-            if (level === 2) {
-              return (
-                <h2 key={idx} className={className}>
-                  {renderInline(block.text)}
-                </h2>
-              );
-            }
-            if (level === 3) {
-              return (
-                <h3 key={idx} className={className}>
-                  {renderInline(block.text)}
-                </h3>
-              );
-            }
-            return (
-              <h4 key={idx} className={className}>
-                {renderInline(block.text)}
-              </h4>
-            );
-          }
-          case 'paragraph':
-            return (
-              <p key={idx} className="text-slate-300">
-                {renderInline(block.text)}
-              </p>
-            );
-          case 'ul':
-            return (
-              <ul key={idx} className="list-disc space-y-1 pl-5 text-slate-300">
-                {block.items.map((item, j) => (
-                  <li key={j}>{renderInline(item)}</li>
-                ))}
-              </ul>
-            );
-          case 'ol':
-            return (
-              <ol key={idx} className="list-decimal space-y-1 pl-5 text-slate-300">
-                {block.items.map((item, j) => (
-                  <li key={j}>{renderInline(item)}</li>
-                ))}
-              </ol>
-            );
-          case 'code':
-            return (
-              <pre
-                key={idx}
-                className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/80 p-4 font-mono text-xs text-slate-300"
-              >
-                <code>{escapeHtml(block.text)}</code>
-              </pre>
-            );
-          case 'hr':
-            return <hr key={idx} className="border-slate-800" />;
-          default:
-            return null;
-        }
-      })}
+    <div className="markdown-body text-sm leading-relaxed text-slate-300">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+        components={markdownComponents}
+      >
+        {source}
+      </ReactMarkdown>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
 import { Github } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { AnalysisProgress } from '../components/AnalysisProgress';
 import { DocumentPreview } from '../components/DocumentPreview';
 import { RepositoryInput } from '../components/RepositoryInput';
 import { ResultDownloadCard } from '../components/ResultDownloadCard';
 import { Footer } from '../components/Footer';
-import { SlidePreview } from '../components/SlidePreview';
-import { usePipelineStore } from '../store/pipelineStore';
+import { isPipelineBusy, usePipelineStore } from '../store/pipelineStore';
 
 export function HomePage() {
   const {
@@ -15,6 +15,7 @@ export function HomePage() {
     error,
     metadata,
     techSpecMarkdown,
+    repoReadmeMarkdown,
     readmeMarkdown,
     pptxBase64,
     pdfBase64,
@@ -27,7 +28,22 @@ export function HomePage() {
     reset,
   } = usePipelineStore();
 
-  const busy = step === 'analyzing' || step === 'spec' || step === 'slides';
+  const busy = isPipelineBusy(step);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const prevStepRef = useRef(step);
+
+  useEffect(() => {
+    const started = prevStepRef.current === 'idle' && step === 'analyzing';
+    const retried = prevStepRef.current === 'error' && step === 'analyzing';
+    prevStepRef.current = step;
+    if (!started && !retried) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }, [step]);
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
@@ -67,7 +83,17 @@ export function HomePage() {
             disabled={busy}
           />
 
-          {step !== 'idle' && <AnalysisProgress step={step} />}
+          {step !== 'idle' && (
+            <div ref={progressRef} className="scroll-mt-4">
+              <AnalysisProgress
+                step={step}
+                hasRepoReadme={Boolean(repoReadmeMarkdown?.trim())}
+                pdfAvailable={pdfAvailable}
+                pdfError={pdfError}
+                pdfNote={pdfNote}
+              />
+            </div>
+          )}
 
           {error && (
             <div className="w-full space-y-3 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
@@ -84,16 +110,16 @@ export function HomePage() {
             </div>
           )}
 
-          {(step === 'spec' || step === 'slides' || step === 'done') && (
+          {step !== 'idle' && (
             <DocumentPreview
-              readme={readmeMarkdown}
+              step={step}
+              repoReadme={repoReadmeMarkdown}
+              translatedReadme={readmeMarkdown}
               techSpec={techSpecMarkdown}
-              loading={step === 'spec'}
+              slideDeck={slideDeck}
               detected={metadata?.detected}
             />
           )}
-
-          <SlidePreview deck={slideDeck} ready={step === 'done'} />
 
           {step === 'done' && (
             <ResultDownloadCard

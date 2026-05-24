@@ -44,7 +44,9 @@ Top-level object: { "slides": SlideSpec[] }`;
   let parsed: SlideDeckSpec;
   try {
     parsed = JSON.parse(raw) as SlideDeckSpec;
-  } catch {
+  } catch (parseErr) {
+    console.error('[generateSlides] JSON.parse failed:', parseErr);
+    console.error('[generateSlides] raw response:', raw);
     throw new Error(JSON_RESPONSE_ERROR);
   }
   if (!parsed.slides || !Array.isArray(parsed.slides) || parsed.slides.length < 3) {

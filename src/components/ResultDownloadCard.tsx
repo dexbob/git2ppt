@@ -1,4 +1,5 @@
-import { FileArchive, FileCode2, FileText, Presentation } from 'lucide-react';
+import { resolvePdfDetailMessage } from '@lib/pdfClientStatus';
+import { FileArchive, FileCode2, FileText, FileType, Presentation } from 'lucide-react';
 import { useState } from 'react';
 import { downloadBase64File, downloadTextFile, downloadZipBundle } from '../utils/download';
 
@@ -26,12 +27,7 @@ export function ResultDownloadCard({
 
   const canZip = readme && techSpec && pptxBase64;
 
-  /** 서버가 pdfNote를 안 주는(구 API·캐시) 경우에도 PDF 비활성 이유를 보이게 함 */
-  const pdfUnavailableHint =
-    pdfNote ||
-    (!pdfAvailable && !pdfError
-      ? 'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev` 또는 `./start_server.sh`)로 실행하거나, 환경 변수 ENABLE_PDF_ON_VERCEL을 확인하세요.'
-      : null);
+  const pdfDetailMessage = resolvePdfDetailMessage(pdfAvailable, pdfError, pdfNote);
 
   async function onZip() {
     if (!canZip) return;
@@ -54,14 +50,15 @@ export function ResultDownloadCard({
   return (
     <section className="w-full space-y-4">
       <h2 className="text-lg font-semibold text-slate-100">다운로드</h2>
-      {pdfError && (
-        <p className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 text-sm leading-relaxed text-amber-100">
-          {pdfError}
-        </p>
-      )}
-      {!pdfError && pdfUnavailableHint && (
-        <p className="rounded-xl border border-slate-600/50 bg-slate-900/70 px-4 py-3 text-sm leading-relaxed text-slate-300">
-          {pdfUnavailableHint}
+      {pdfDetailMessage && (
+        <p
+          className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${
+            pdfError
+              ? 'border-amber-500/35 bg-amber-950/25 text-amber-100'
+              : 'border-slate-600/50 bg-slate-900/70 text-slate-300'
+          }`}
+        >
+          {pdfDetailMessage}
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -119,11 +116,11 @@ export function ResultDownloadCard({
           }
           className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-4 text-left transition hover:border-accent-cyan/50 disabled:opacity-40"
         >
-          <FileText className="h-6 w-6 shrink-0 text-accent-cyan" />
+          <FileType className="h-6 w-6 shrink-0 text-accent-cyan" />
           <div>
             <div className="font-medium text-slate-100">PDF</div>
             <div className="text-xs text-slate-500">
-              {pdfAvailable ? 'slides.pdf' : '이 환경에서는 미제공 · 아래 안내 참고'}
+              {pdfAvailable ? 'slides.pdf' : '이 환경에서는 미제공 · 위·아래 안내 참고'}
             </div>
           </div>
         </button>

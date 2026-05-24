@@ -1,8 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { RepositoryMetadata } from '../lib/types.js';
 import { formatUserFacingError } from '../lib/formatUserFacingError.js';
-import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
-import { loadInstructionFromFile } from '../lib/instructionFile.js';
+import { translateReadmeToKorean } from '../lib/translateReadme.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,16 +18,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const metadata = body?.metadata as RepositoryMetadata | undefined;
-    if (!metadata) {
-      res.status(400).json({ error: 'metadata가 필요합니다.' });
+    const sourceMarkdown = body?.sourceMarkdown as string | undefined;
+    if (!sourceMarkdown?.trim()) {
+      res.status(400).json({ error: 'sourceMarkdown가 필요합니다.' });
       return;
     }
-    const instruction = await loadInstructionFromFile();
-    const { techSpecMarkdown } = await generateSpecWithOpenAI(metadata, instruction);
-    res.status(200).json({ techSpecMarkdown });
+    const readmeMarkdown = await translateReadmeToKorean(sourceMarkdown);
+    res.status(200).json({ readmeMarkdown });
   } catch (err) {
-    const message = formatUserFacingError(err, '기술명세서 생성에 실패했습니다.');
+    const message = formatUserFacingError(err, 'README 번역에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 }

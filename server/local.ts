@@ -10,6 +10,7 @@ import type { DetectedSignals, RepositoryMetadata } from '../lib/types.js';
 import { coverTagsFromSignals } from '../lib/coverTags.js';
 import { analyzeGithubRepository } from '../lib/analyzeRepo.js';
 import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
+import { translateReadmeToKorean } from '../lib/translateReadme.js';
 import { loadInstructionFromFile } from '../lib/instructionFile.js';
 import { generateSlideDeckSpec } from '../lib/generateSlides.js';
 import { buildPptxBuffer } from '../lib/buildPptx.js';
@@ -62,6 +63,21 @@ app.post('/api/generate-spec', async (req, res) => {
     res.json(out);
   } catch (err) {
     const message = formatUserFacingError(err, '기술명세서 생성에 실패했습니다.');
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/translate-readme', async (req, res) => {
+  try {
+    const sourceMarkdown = req.body?.sourceMarkdown as string | undefined;
+    if (!sourceMarkdown?.trim()) {
+      res.status(400).json({ error: 'sourceMarkdown가 필요합니다.' });
+      return;
+    }
+    const readmeMarkdown = await translateReadmeToKorean(sourceMarkdown);
+    res.json({ readmeMarkdown });
+  } catch (err) {
+    const message = formatUserFacingError(err, 'README 번역에 실패했습니다.');
     res.status(500).json({ error: message });
   }
 });
