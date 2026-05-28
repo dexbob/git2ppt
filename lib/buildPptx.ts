@@ -1,4 +1,5 @@
 import PptxGenJS from 'pptxgenjs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { SlideDeckSpec, SlideSpec } from './types.js';
 
 /** 레이아웃 참고: reference/slide-sample (색·폰트는 가독성 위주로 단순화) */
@@ -19,6 +20,64 @@ const WM = W - (XM - X0) * 2;
 /** 본문은 푸터 구분선(≈5.05) 위 안전 영역 안에만 배치 */
 const CONTENT_MAX_Y = 4.88;
 const FOOTER_RULE_Y = 5.05;
+
+function pageBgVariant(index: number): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  shadeTransparency: number;
+  leftMaskW: number;
+  leftMaskTransparency: number;
+} {
+  const k = Math.max(0, index);
+  const x = -0.52 + (k % 4) * 0.1;
+  const y = -0.22 + (k % 5) * 0.06;
+  const w = 10.8 + (k % 3) * 0.22;
+  const h = 6.05 + (k % 4) * 0.09;
+  const shadeTransparency = 78 - (k % 4) * 5;
+  const leftMaskW = 4.4 + (k % 3) * 0.35;
+  const leftMaskTransparency = 20 + (k % 3) * 6;
+  return { x, y, w, h, shadeTransparency, leftMaskW, leftMaskTransparency };
+}
+
+function applySlideBackground(
+  pptx: PptxGenJS,
+  slide: ReturnType<PptxGenJS['addSlide']>,
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
+) {
+  slide.background = { color: BG };
+  const bgData = slideIndex % 2 === 0 ? bgDataA ?? bgDataB : bgDataB ?? bgDataA;
+  if (!bgData) return;
+  const v = pageBgVariant(slideIndex);
+  slide.addImage({
+    data: bgData,
+    x: v.x,
+    y: v.y,
+    w: v.w,
+    h: v.h,
+  });
+  // 페이지별로 강도를 다르게 해서 같은 기본 배경도 다르게 보이게 만든다.
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: 10,
+    h: 5.625,
+    fill: { color: BG, transparency: v.shadeTransparency },
+    line: { color: BG, transparency: 100, width: 0 },
+  });
+  // 좌측 텍스트 영역은 항상 가독성을 위해 한 겹 더 눌러준다.
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: v.leftMaskW,
+    h: 5.625,
+    fill: { color: BG, transparency: v.leftMaskTransparency },
+    line: { color: BG, transparency: 100, width: 0 },
+  });
+}
 
 function githubOwnerFromUrl(repoUrl: string): string {
   try {
@@ -155,82 +214,73 @@ function addHeaderBand(
   });
 }
 
-/** 한 줄 텍스트 박스 크기 (하이퍼링크 클릭 영역을 글자 크기에 가깝게) */
-function estimateSingleLineTextBox(text: string, fontSizePt: number): { w: number; h: number } {
+function estimateCharUnits(text: string): number {
   let charUnits = 0;
   for (const ch of text) {
     const cp = ch.codePointAt(0)!;
     charUnits += cp > 0x7f ? 1.75 : 1;
   }
-  const w = Math.min(WM, Math.max(0.85, charUnits * (fontSizePt / 72) * 0.095));
+  return charUnits;
+}
+
+function estimateTextWidthInches(text: string, fontSizePt: number): number {
+  return estimateCharUnits(text) * (fontSizePt / 72) * 0.095;
+}
+
+/** 한 줄 텍스트 박스 크기 (하이퍼링크 클릭 영역을 글자 크기에 가깝게) */
+function estimateSingleLineTextBox(text: string, fontSizePt: number): { w: number; h: number } {
+  const w = Math.min(WM, Math.max(0.85, estimateTextWidthInches(text, fontSizePt)));
   const h = Math.max(0.26, (fontSizePt / 72) * 1.35);
   return { w, h };
 }
 
 const COVER_TAG_FS = 9.5;
-const COVER_TAG_GAP = 0.05;
 const COVER_TAG_ROW_H = 0.28;
-const COVER_TAG_ROW_GAP = 0.04;
-const COVER_TAG_MAX_ROWS = 2;
+const COVER_TAG_SEPARATOR = '   ';
 
 /** 설명과 동일 가로폭(WM) 안에서 태그 줄 수·높이 계산 */
 function measureCoverTagsHeight(tags: string[]): number {
   if (!tags.length) return 0;
-  const maxX = XM + WM;
-  let x = XM;
-  let rows = 1;
-
-  for (const tag of tags) {
-    const w = estimateSingleLineTextBox(tag, COVER_TAG_FS).w;
-    if (x + w > maxX && x > XM) {
-      rows += 1;
-      if (rows > COVER_TAG_MAX_ROWS) break;
-      x = XM;
-    }
-    if (x + w > maxX) continue;
-    x += w + COVER_TAG_GAP;
-  }
-
-  return rows * COVER_TAG_ROW_H + (rows > 1 ? (rows - 1) * COVER_TAG_ROW_GAP : 0);
+  return COVER_TAG_ROW_H;
 }
 
-/** 표지 #태그: 설명 폭(WM) 안에서 가로 배치, 넘치면 다음 줄(최대 2줄) */
+/** 한 줄(WM)에 들어가는 태그만 공백 간격으로 이어 붙인다. */
+function fitCoverTagsOneLine(tags: string[], maxWidth: number): string {
+  const fitted: string[] = [];
+  for (const tag of tags) {
+    const candidate =
+      fitted.length === 0 ? tag : `${fitted.join(COVER_TAG_SEPARATOR)}${COVER_TAG_SEPARATOR}${tag}`;
+    const w = estimateTextWidthInches(candidate, COVER_TAG_FS);
+    if (w > maxWidth && fitted.length > 0) break;
+    fitted.push(tag);
+    if (w > maxWidth) break;
+  }
+  return fitted.join(COVER_TAG_SEPARATOR);
+}
+
+/** 표지 #태그: 한 박스·왼쪽 정렬·일정 간격(공백), 한 줄 넘치면 개수 자동 조절 */
 function addCoverTagsRow(
   slide: ReturnType<PptxGenJS['addSlide']>,
   tags: string[],
   y: number,
 ): number {
-  if (!tags.length) return y;
-  const maxX = XM + WM;
-  let x = XM;
-  let rowY = y;
-  let rows = 1;
+  const line = fitCoverTagsOneLine(tags, WM);
+  if (!line) return y;
 
-  for (const tag of tags) {
-    const w = estimateSingleLineTextBox(tag, COVER_TAG_FS).w;
-    if (x + w > maxX && x > XM) {
-      rows += 1;
-      if (rows > COVER_TAG_MAX_ROWS) break;
-      rowY += COVER_TAG_ROW_H + COVER_TAG_ROW_GAP;
-      x = XM;
-    }
-    if (x + w > maxX) continue;
+  slide.addText(line, {
+    x: XM,
+    y,
+    w: WM,
+    h: COVER_TAG_ROW_H,
+    fontSize: COVER_TAG_FS,
+    color: MUTED,
+    fontFace: FONT,
+    valign: 'middle',
+    wrap: false,
+    align: 'left',
+  });
 
-    slide.addText(tag, {
-      x,
-      y: rowY,
-      w,
-      h: COVER_TAG_ROW_H,
-      fontSize: COVER_TAG_FS,
-      color: MUTED,
-      fontFace: FONT,
-      valign: 'middle',
-      wrap: false,
-    });
-    x += w + COVER_TAG_GAP;
-  }
-
-  return rowY + COVER_TAG_ROW_H;
+  return y + COVER_TAG_ROW_H;
 }
 
 /** 표지 작성자: @Name (GitHub Name 우선, 없으면 @login) */
@@ -248,9 +298,12 @@ function addCoverSlide(
   footerRightShort: string,
   presenterName: string,
   coverTags: string[],
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: BG };
+  applySlideBackground(pptx, slide, slideIndex, bgDataA, bgDataB);
 
   const gitY = 0.22;
   const gitH = 0.32;
@@ -275,8 +328,9 @@ function addCoverSlide(
   const tagsBlockH = hasTags ? measureCoverTagsHeight(coverTags) : 0;
   const titleH = 1.18;
   const titleFs = 36;
-  const descH = desc ? 1.18 : 0;
-  const gapTitleDesc = desc ? 0.1 : 0;
+  const descH = desc ? 1.58 : 0;
+  const descFs = 16;
+  const gapTitleDesc = desc ? 0.14 : 0;
   const gapLine = 0.12;
   const gapUrlTags = hasTags && repoLink ? 0.14 : 0;
   const metaH =
@@ -316,11 +370,12 @@ function addCoverSlide(
       y: nextY,
       w: WM,
       h: descH,
-      fontSize: 13,
+      fontSize: descFs,
       color: MUTED,
       fontFace: FONT,
       valign: 'top',
       wrap: true,
+      lineSpacingMultiple: 1.25,
     });
     nextY += descH + gapDescMeta;
   }
@@ -372,9 +427,12 @@ function addBulletsSlide(
   sectionTag: string,
   footerRepoShort: string,
   brandRight: string,
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: BG };
+  applySlideBackground(pptx, slide, slideIndex, bgDataA, bgDataB);
   addHeaderBand(slide, sectionTag, s.title);
 
   if (s.bullets.length === 2) {
@@ -512,9 +570,12 @@ function addCardsSlide(
   sectionTag: string,
   footerRepoShort: string,
   brandRight: string,
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: BG };
+  applySlideBackground(pptx, slide, slideIndex, bgDataA, bgDataB);
   const sub =
     s.cards[0]?.body && s.cards[0].body.length > 0
       ? (s.cards[0].body.length > 90 ? `${s.cards[0].body.slice(0, 87)}…` : s.cards[0].body)
@@ -570,9 +631,12 @@ function addFlowSlide(
   sectionTag: string,
   footerRepoShort: string,
   brandRight: string,
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: BG };
+  applySlideBackground(pptx, slide, slideIndex, bgDataA, bgDataB);
   addHeaderBand(slide, sectionTag, s.title);
 
   const steps = s.steps;
@@ -643,9 +707,12 @@ function addClosingSlide(
   sectionTag: string,
   footerRepoShort: string,
   brandRight: string,
+  slideIndex: number,
+  bgDataA: string | null,
+  bgDataB: string | null,
 ) {
   const slide = pptx.addSlide();
-  slide.background = { color: BG };
+  applySlideBackground(pptx, slide, slideIndex, bgDataA, bgDataB);
   addHeaderBand(slide, sectionTag, '마무리');
 
   const takeaways = (s.takeaways ?? [])
@@ -762,6 +829,10 @@ export type BuildPptxOptions = {
   ownerDisplayName?: string | null;
   /** 표지 #태그 줄 (예: #React #Docker) */
   coverTags?: string[];
+  /** 표지 우측 반투명 배경 이미지 경로 */
+  coverBackgroundPath?: string | null;
+  /** 두 번째 기본 배경 경로 (페이지별 변형용) */
+  coverBackgroundAltPath?: string | null;
 };
 
 export async function buildPptxBuffer(
@@ -780,6 +851,16 @@ export async function buildPptxBuffer(
     ? resolveCoverPresenter(options?.ownerDisplayName, cover.repoUrl)
     : '';
   const coverTags = options?.coverTags ?? [];
+  const coverBackgroundPath = options?.coverBackgroundPath ?? null;
+  const coverBackgroundAltPath = options?.coverBackgroundAltPath ?? null;
+  const bgDataA =
+    coverBackgroundPath && existsSync(coverBackgroundPath)
+      ? `image/png;base64,${readFileSync(coverBackgroundPath).toString('base64')}`
+      : null;
+  const bgDataB =
+    coverBackgroundAltPath && existsSync(coverBackgroundAltPath)
+      ? `image/png;base64,${readFileSync(coverBackgroundAltPath).toString('base64')}`
+      : null;
 
   let idx = 0;
   for (const s of spec.slides) {
@@ -788,19 +869,29 @@ export async function buildPptxBuffer(
 
     switch (s.type) {
       case 'cover':
-        addCoverSlide(pptx, s, footerRepoShort, brandRight, coverPresenter, coverTags);
+        addCoverSlide(
+          pptx,
+          s,
+          footerRepoShort,
+          brandRight,
+          coverPresenter,
+          coverTags,
+          idx - 1,
+          bgDataA,
+          bgDataB,
+        );
         break;
       case 'bullets':
-        addBulletsSlide(pptx, s, tag, footerRepoShort, brandRight);
+        addBulletsSlide(pptx, s, tag, footerRepoShort, brandRight, idx - 1, bgDataA, bgDataB);
         break;
       case 'cards':
-        addCardsSlide(pptx, s, tag, footerRepoShort, brandRight);
+        addCardsSlide(pptx, s, tag, footerRepoShort, brandRight, idx - 1, bgDataA, bgDataB);
         break;
       case 'flow':
-        addFlowSlide(pptx, s, tag, footerRepoShort, brandRight);
+        addFlowSlide(pptx, s, tag, footerRepoShort, brandRight, idx - 1, bgDataA, bgDataB);
         break;
       case 'closing':
-        addClosingSlide(pptx, s, tag, footerRepoShort, brandRight);
+        addClosingSlide(pptx, s, tag, footerRepoShort, brandRight, idx - 1, bgDataA, bgDataB);
         break;
       default:
         break;

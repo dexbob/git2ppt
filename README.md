@@ -1,12 +1,20 @@
+<div align="center">
+
 # Git Repository Presentation Generator
 
-**Git 저장소 기반 자동 프레젠테이션 생성기** — GitHub URL 하나로 저장소를 읽고, AI가 기술명세·요약 README·발표 슬라이드(PPT/PDF)까지 만들어 주는 웹 앱입니다.
+**Git 저장소 기반 자동 프레젠테이션 생성기**
 
-| | |
+GitHub URL 하나로 저장소를 분석하고, AI가 기술명세서와 발표 슬라이드(PPT/PDF)까지 자동 생성합니다.
+
+[빠른 시작](#빠른-시작) · [기능 개요](#이-프로젝트가-하는-일) · [환경 변수](#환경-변수) · [API](#api)
+
+</div>
+
+| 항목 | 값 |
 |---|---|
-| npm 패키지명 | `git2ppt` |
-| 버전 | `1.4.0` |
+| 패키지명 | `git2ppt` |
 | Node.js | 20+ |
+| 주요 런타임 | React + Vite + Express + Vercel |
 
 ---
 
@@ -14,7 +22,7 @@
 
 개발자가 낯선 저장소를 **빠르게 이해하고 발표 자료까지** 준비하는 시간을 줄이는 것이 목표입니다. 웹 화면에서 공개(또는 `GITHUB_TOKEN`으로 접근 가능한) GitHub 저장소 HTTPS URL을 넣고 **「분석 및 자료 생성」** (또는 Enter)을 실행하면, 서버가 아래를 **순서대로** 수행합니다.
 
-1. **저장소 가져오기·분석** — 환경에 따라 `git` shallow clone 또는 GitHub API + ZIP으로 소스를 가져옵니다. `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스 스니펫을 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 **메타데이터(JSON)** 로 정리합니다. 루트 `README.md` 원문을 추출하고, 상대 경로 이미지는 GitHub raw URL로 보정합니다.
+1. **저장소 가져오기·분석** — 기본은 `git` shallow clone(무토큰)이며, `partial clone(--filter=blob:none) + sparse checkout`으로 텍스트 위주 파일만 받아 대용량 이미지/영상 다운로드를 최소화합니다. 실패 시 `GITHUB_TOKEN`이 설정되어 있으면 자동으로 토큰 인증 clone을 재시도합니다(단, 타임아웃 실패는 즉시 종료 후 시간 증가 재시도 경로). `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스 스니펫을 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 **메타데이터(JSON)** 로 정리합니다. 루트 `README.md` 원문을 추출하고, 상대 경로 이미지·영상은 GitHub raw URL로 보정합니다.
 2. **README 번역** (README가 있을 때) — 원문 README를 LLM으로 **한국어 전체 번역**합니다. 구조·배지·HTML·코드는 유지하고, prose만 번역합니다.
 3. **기술명세 생성** — 스캔 결과를 바탕으로 LLM이 **마크다운 기술명세**(`tech_spec.md` 성격)만 작성합니다. [`reference/instruction.md`](reference/instruction.md)가 비어 있지 않으면 추가 인스트럭션으로 사용합니다(`INSTRUCTION_FILE`로 경로 변경 가능).
 4. **발표용 슬라이드** — 기술명세와 **번역 README**(없으면 원문)를 입력으로 슬라이드 구조(JSON)를 만든 뒤 **PPTX**로 렌더링합니다. LibreOffice(`soffice`)가 있는 환경에서는 **PDF** 변환도 시도합니다.
@@ -37,6 +45,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 - **슬라이드 프리뷰** — `SlideDeckViewer`로 슬라이드 단위 미리보기.
 - 개별 다운로드: `README.md`(한국어 번역본), `tech_spec.md`, `slides.pptx`, `slides.pdf`(가능 시), **ZIP 일괄** (`presentation-bundle.zip`)
 - PDF 미제공·변환 실패 시 진행 카드·다운로드 섹션에 `pdfNote` / `pdfError` 안내
+- 저장소 분석 타임아웃 시 `+60초 늘려 재시도` 버튼 제공 (실패 단계부터 재시도)
 
 ### 생성물
 
@@ -61,7 +70,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 | 공유 로직 | [`lib/`](lib/) (`@lib` 별칭) |
 | LLM | `@google/generative-ai`, `openai` |
 | 문서·슬라이드 | PptxGenJS, LibreOffice(선택 PDF), `archiver`(ZIP) |
-| 저장소 수집 | `simple-git`(clone), `adm-zip`(GitHub ZIP) |
+| 저장소 수집 | `simple-git` (partial clone + sparse checkout, 토큰 fallback) |
 
 ---
 
@@ -141,14 +150,13 @@ chmod +x start_server.sh   # 최초 1회
 
 ## 저장소 가져오기 방식
 
-| 조건 | 방식 |
+| 단계 | 방식 |
 |------|------|
-| `USE_GITHUB_ZIP=1` | GitHub API + ZIP (`lib/downloadGithubZip.ts`) |
-| `USE_GITHUB_ZIP=0` | `git` shallow clone (`lib/cloneRepo.ts`) |
-| `VERCEL=1` 이고 위 미설정 | 기본 **ZIP** |
-| 그 외 로컬 | 기본 **git clone** → `temp/clones/` |
+| 1차 시도(기본) | `git` shallow clone + `--filter=blob:none` + `--sparse` (`lib/cloneRepo.ts`) — 토큰 없이 시도 |
+| 2차 시도(자동) | 1차 실패가 일반 오류일 때 + `GITHUB_TOKEN` 존재 시 토큰 인증 clone 재시도 |
+| 타임아웃 실패 | 토큰 fallback 없이 종료 후, UI에서 `+60초 늘려 재시도` 안내 |
 
-클론/ZIP 임시 디렉터리는 분석 후 삭제됩니다. GitHub API 호출 시 User-Agent는 `git2ppt`입니다.
+클론 임시 디렉터리는 분석 후 삭제됩니다.
 
 ---
 
@@ -173,9 +181,8 @@ chmod +x start_server.sh   # 최초 1회
 | 변수 | 설명 |
 |------|------|
 | `GITHUB_TOKEN` | 비공개 저장소·rate limit |
-| `GIT_CLONE_TIMEOUT_MS` | clone 타임아웃 (기본 `120000`) |
-| `USE_GITHUB_ZIP` | `1` / `0` — ZIP·clone 강제 |
-| `GITHUB_ZIP_TIMEOUT_MS` | ZIP 타임아웃 (기본 `120000`) |
+| `GIT_CLONE_TIMEOUT_MS` | 저장소 분석(클론+스캔) 타임아웃 기준 (기본 `120000`) |
+| `GITHUB_ZIP_TIMEOUT_MS` | GitHub 메타 API 조회 타임아웃 (기본 `120000`) |
 | `INSTRUCTION_FILE` | 기술명세 인스트럭션 경로 (기본 `reference/instruction.md`) |
 
 ### 서버
@@ -215,8 +222,8 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 ## Vercel 배포
 
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
-2. 환경 변수: `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·ZIP에는 `GITHUB_TOKEN` 권장)
-3. `VERCEL=1` 환경에서는 기본적으로 **ZIP**으로 소스 수집
+2. 환경 변수: `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
+3. 저장소 수집은 기본적으로 `git` shallow clone(무토큰 우선, 실패 시 토큰 재시도) 방식
 4. LibreOffice 없음 → **PDF 기본 비활성** (`pdfAvailable: false`, `pdfNote`로 안내). PPTX·마크다운은 동일
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
 
@@ -230,7 +237,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 
 | 경로 | Body | 응답 요약 |
 |------|------|-----------|
-| `POST /api/analyze-repo` | `{ "url": "https://github.com/owner/repo" }` | `{ "metadata" }` — `ownerDisplayName`, `githubTopics`, `detected`, `priorityFileSummaries`(README 포함) 등 |
+| `POST /api/analyze-repo` | `{ "url": "https://github.com/owner/repo", "timeoutMs"?: number }` | 성공: `{ "metadata" }` / 타임아웃: `408 { "code":"ANALYZE_TIMEOUT", "timeoutMs", "error" }` |
 | `POST /api/translate-readme` | `{ "sourceMarkdown": "..." }` | `{ "readmeMarkdown" }` — 한국어 전체 번역(마크다운 본문만) |
 | `POST /api/generate-spec` | `{ "metadata": { ... } }` | `{ "techSpecMarkdown" }` |
 | `POST /api/generate-slides` | `{ "techSpecMarkdown", "repoUrl", "readmeMarkdown"?`, `ownerDisplayName?`, `detected?`, `githubTopics?` }` | `{ "slideDeck", "pptxBase64", "pdfBase64", "pdfAvailable", "pdfError", "pdfNote" }` |

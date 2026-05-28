@@ -103,12 +103,63 @@ export function readmeTitleAndDescription(markdown: string): { title: string; de
   return { title: title || '', description };
 }
 
+/**
+ * 표지 설명(tagline) 후처리:
+ * - 마크업/과도한 공백 제거
+ * - 데모/프로필링 같은 홍보성 꼬리 문구 제거
+ * - 과도하게 길면 말줄임
+ */
+export function sanitizeCoverTagline(raw: string): string {
+  let text = plainReadableText(raw ?? '');
+  if (!text) return '';
+
+  // "..." / " - ..." / " | ..." 형태의 꼬리 문구 제거 (데모·체험·프로파일링 등)
+  text = text
+    .replace(/\s*[|]\s*(?:ai\s*)?프로파일링(?:\s*\([^)]*\))?\.?$/i, '')
+    .replace(/\s*[-–—]\s*(?:ai\s*)?프로파일링(?:\s*\([^)]*\))?\.?$/i, '')
+    .replace(/\s*[|]\s*데모(?:\s*\([^)]*\))?\.?$/i, '')
+    .replace(/\s*[-–—]\s*데모(?:\s*\([^)]*\))?\.?$/i, '')
+    .replace(/\s*\((?:ai\s*)?프로파일링(?:\s*데모)?\)\s*$/i, '')
+    .replace(/\s*\((?:demo|데모|체험판)\)\s*$/i, '')
+    .trim();
+
+  // 한 줄에 한 문장: 문장 단위로 나누고 최대 3줄만 사용
+  const sentences = text.split(/\r?\n|(?<=[.!?。！？])\s+/u).map((s) => s.trim()).filter(Boolean);
+
+  const picked: string[] = [];
+  for (const s of sentences) {
+    let normalized = s.replace(/\s+/g, ' ').trim();
+    if (!normalized) continue;
+
+    // 설명형 종결을 카피 톤(명사형)에 가깝게 정리
+    normalized = normalized
+      .replace(/[.!?]+$/g, '')
+      .replace(/(입니다|입니다요|였습니다|였습니다요)\s*$/u, '')
+      .replace(/([가-힣A-Za-z0-9]+)합니다\s*$/u, '$1')
+      .replace(/([가-힣A-Za-z0-9]+)됩니다\s*$/u, '$1')
+      .replace(/([가-힣A-Za-z0-9]+)됩니다요\s*$/u, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!normalized) continue;
+
+    picked.push(normalized);
+    if (picked.length >= 3) break;
+  }
+
+  if (picked.length === 0) {
+    const compact = text.replace(/[.!?]+$/g, '').replace(/\s+/g, ' ').trim();
+    if (!compact) return '';
+    return compact;
+  }
+
+  return picked.join('\n');
+}
+
 export function applyReadmeToCoverSlide(spec: SlideDeckSpec, readmeMarkdown: string): void {
-  const { title, description } = readmeTitleAndDescription(readmeMarkdown);
+  const { title } = readmeTitleAndDescription(readmeMarkdown);
   const cover = spec.slides.find((s): s is Extract<SlideSpec, { type: 'cover' }> => s.type === 'cover');
   if (!cover) return;
   if (title) cover.projectName = title;
-  if (description) cover.tagline = description;
 }
 
 export function normalizeClosingSlide(spec: SlideDeckSpec): void {

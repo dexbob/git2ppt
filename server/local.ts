@@ -8,12 +8,17 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 import type { DetectedSignals, RepositoryMetadata } from '../lib/types.js';
 import { coverTagsFromSignals } from '../lib/coverTags.js';
-import { analyzeGithubRepository } from '../lib/analyzeRepo.js';
+import { AnalyzeTimeoutError, analyzeGithubRepository } from '../lib/analyzeRepo.js';
 import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
 import { translateReadmeToKorean } from '../lib/translateReadme.js';
 import { loadInstructionFromFile } from '../lib/instructionFile.js';
 import { generateSlideDeckSpec } from '../lib/generateSlides.js';
 import { buildPptxBuffer } from '../lib/buildPptx.js';
+import {
+  cleanupDynamicCoverPath,
+  resolveCoverBackgroundPath,
+  secondaryTemplateCoverPath,
+} from '../lib/coverBackground.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import {
   base64ToBuffer,
@@ -39,13 +44,24 @@ app.use(express.json({ limit: '32mb' }));
 app.post('/api/analyze-repo', async (req, res) => {
   try {
     const url = req.body?.url as string | undefined;
+    const timeoutMsRaw = req.body?.timeoutMs;
+    const timeoutMs =
+      typeof timeoutMsRaw === 'number' && Number.isFinite(timeoutMsRaw) ? timeoutMsRaw : undefined;
     if (!url?.trim()) {
       res.status(400).json({ error: 'url이 필요합니다.' });
       return;
     }
-    const metadata = await analyzeGithubRepository(url.trim());
+    const metadata = await analyzeGithubRepository(url.trim(), { cloneTimeoutMs: timeoutMs });
     res.json({ metadata });
   } catch (err) {
+    if (err instanceof AnalyzeTimeoutError) {
+      res.status(408).json({
+        code: 'ANALYZE_TIMEOUT',
+        timeoutMs: err.timeoutMs,
+        error: err.message,
+      });
+      return;
+    }
     const message = err instanceof Error ? err.message : '저장소 분석에 실패했습니다.';
     res.status(500).json({ error: message });
   }
@@ -103,10 +119,25 @@ app.post('/api/generate-slides', async (req, res) => {
       detected != null
         ? coverTagsFromSignals(detected, Array.isArray(githubTopics) ? githubTopics : [])
         : [];
-    const pptxBuffer = await buildPptxBuffer(slideDeck, {
-      ownerDisplayName: ownerDisplayName ?? null,
-      coverTags,
+    const coverSlide = slideDeck.slides.find((s) => s.type === 'cover');
+    const coverBg = await resolveCoverBackgroundPath({
+      repoUrl: repoUrl.trim(),
+      projectName: coverSlide?.type === 'cover' ? coverSlide.projectName : undefined,
+      detected,
+      githubTopics: Array.isArray(githubTopics) ? githubTopics : [],
     });
+    const coverBgAltPath = secondaryTemplateCoverPath(coverBg.category);
+    let pptxBuffer: Buffer;
+    try {
+      pptxBuffer = await buildPptxBuffer(slideDeck, {
+        ownerDisplayName: ownerDisplayName ?? null,
+        coverTags,
+        coverBackgroundPath: coverBg.path,
+        coverBackgroundAltPath: coverBgAltPath,
+      });
+    } finally {
+      await cleanupDynamicCoverPath(coverBg);
+    }
     const skipPdf = process.env.SKIP_PDF === '1';
     let pdfBuffer: Buffer | null = null;
     let pdfError: string | null = null;

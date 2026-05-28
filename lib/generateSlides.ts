@@ -1,7 +1,13 @@
 import type { SlideDeckSpec } from './types.js';
 import { JSON_RESPONSE_ERROR } from './formatUserFacingError.js';
 import { completeJsonText } from './llmCompleteJson.js';
-import { applyReadmeToCoverSlide, normalizeClosingSlide } from './readmeCoverHints.js';
+import { logJsonParseFailure } from './logJsonParseFailure.js';
+import { parseJsonWithRecovery } from './parseJsonWithRecovery.js';
+import {
+  applyReadmeToCoverSlide,
+  normalizeClosingSlide,
+  sanitizeCoverTagline,
+} from './readmeCoverHints.js';
 
 const SLIDE_SCHEMA_HINT = `JSON schema for "slides" array items (use these discriminated "type" values only):
 - {"type":"cover","projectName":string,"tagline":string,"repoUrl":string,"generatedAt":string ISO}
@@ -21,7 +27,14 @@ For type "closing" (final slide): this slide is the deck wrap-up and MUST NOT re
 
 CRITICAL: Every slide must reflect ONLY the provided repository URL and the technical specification markdown below. Do not invent product features, stack items, or domain content that are not clearly supported by that tech spec. Do not reuse wording from unrelated sample documents.
 
-When a README excerpt is provided below, the cover slide projectName and tagline MUST match that README: projectName = the first markdown H1 title line (without the leading #), tagline = the first substantive plain-text paragraph after that title (one or two sentences, under 200 characters if possible). tagline MUST be plain text only: no HTML tags, no markdown images, no raw URLs as the whole line.`;
+When a README excerpt is provided below:
+- cover projectName should match the first markdown H1 title line (without leading #).
+- cover tagline should be an LLM-refined Korean explanation grounded in README + technical spec.
+- cover tagline should be 2-3 short lines total, one sentence per line.
+- each sentence should be concise enough to read at a glance, but line lengths may vary naturally.
+- prefer impactful copywriting tone with noun-style endings; avoid polite declarative endings like "입니다/습니다".
+- tagline must avoid promo/demo phrases (e.g., "데모", "프로파일링"), markdown/image/link artifacts, and raw URL tails.
+- tagline must be plain text only.`;
 
 export async function generateSlideDeckSpec(
   techSpecMarkdown: string,
@@ -43,10 +56,9 @@ Top-level object: { "slides": SlideSpec[] }`;
 
   let parsed: SlideDeckSpec;
   try {
-    parsed = JSON.parse(raw) as SlideDeckSpec;
+    parsed = parseJsonWithRecovery<SlideDeckSpec>(raw);
   } catch (parseErr) {
-    console.error('[generateSlides] JSON.parse failed:', parseErr);
-    console.error('[generateSlides] raw response:', raw);
+    logJsonParseFailure('generateSlides', raw, parseErr);
     throw new Error(JSON_RESPONSE_ERROR);
   }
   if (!parsed.slides || !Array.isArray(parsed.slides) || parsed.slides.length < 3) {
@@ -54,6 +66,10 @@ Top-level object: { "slides": SlideSpec[] }`;
   }
 
   normalizeClosingSlide(parsed);
+  const cover = parsed.slides.find((s) => s.type === 'cover');
+  if (cover && typeof cover.tagline === 'string') {
+    cover.tagline = sanitizeCoverTagline(cover.tagline);
+  }
   if (readmeMarkdown?.trim()) {
     applyReadmeToCoverSlide(parsed, readmeMarkdown.trim());
   }

@@ -11,6 +11,7 @@ type Props = {
   pdfAvailable: boolean;
   pdfError: string | null;
   pdfNote: string | null;
+  zipEnabled: boolean;
 };
 
 export function ResultDownloadCard({
@@ -21,23 +22,29 @@ export function ResultDownloadCard({
   pdfAvailable,
   pdfError,
   pdfNote,
+  zipEnabled,
 }: Props) {
   const [zipLoading, setZipLoading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
 
-  const canZip = readme && techSpec && pptxBase64;
+  const canZip = Boolean(readme && techSpec && pptxBase64 && zipEnabled);
 
   const pdfDetailMessage = resolvePdfDetailMessage(pdfAvailable, pdfError, pdfNote);
+  const hasResolvedPdfStatus =
+    pdfAvailable || Boolean(pdfError?.trim()) || Boolean(pdfNote?.trim());
 
   async function onZip() {
     if (!canZip) return;
+    const readmeMarkdown = readme!;
+    const techSpecMarkdown = techSpec!;
+    const pptx = pptxBase64!;
     setZipLoading(true);
     setZipError(null);
     try {
       await downloadZipBundle({
-        readmeMarkdown: readme,
-        techSpecMarkdown: techSpec,
-        pptxBase64,
+        readmeMarkdown,
+        techSpecMarkdown,
+        pptxBase64: pptx,
         pdfBase64,
       });
     } catch (e) {
@@ -50,7 +57,7 @@ export function ResultDownloadCard({
   return (
     <section className="w-full space-y-4">
       <h2 className="text-lg font-semibold text-slate-100">다운로드</h2>
-      {pdfDetailMessage && (
+      {hasResolvedPdfStatus && pdfDetailMessage && (
         <p
           className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${
             pdfError

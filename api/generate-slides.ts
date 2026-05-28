@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateSlideDeckSpec } from '../lib/generateSlides.js';
 import { buildPptxBuffer } from '../lib/buildPptx.js';
+import {
+  cleanupDynamicCoverPath,
+  resolveCoverBackgroundPath,
+  secondaryTemplateCoverPath,
+} from '../lib/coverBackground.js';
 import { coverTagsFromSignals } from '../lib/coverTags.js';
 import type { DetectedSignals } from '../lib/types.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
@@ -44,10 +49,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       detected != null
         ? coverTagsFromSignals(detected, Array.isArray(githubTopics) ? githubTopics : [])
         : [];
-    const pptxBuffer = await buildPptxBuffer(slideDeck, {
-      ownerDisplayName: ownerDisplayName ?? null,
-      coverTags,
+    const coverSlide = slideDeck.slides.find((s) => s.type === 'cover');
+    const coverBg = await resolveCoverBackgroundPath({
+      repoUrl: repoUrl.trim(),
+      projectName: coverSlide?.type === 'cover' ? coverSlide.projectName : undefined,
+      detected,
+      githubTopics: Array.isArray(githubTopics) ? githubTopics : [],
     });
+    const coverBgAltPath = secondaryTemplateCoverPath(coverBg.category);
+    let pptxBuffer: Buffer;
+    try {
+      pptxBuffer = await buildPptxBuffer(slideDeck, {
+        ownerDisplayName: ownerDisplayName ?? null,
+        coverTags,
+        coverBackgroundPath: coverBg.path,
+        coverBackgroundAltPath: coverBgAltPath,
+      });
+    } finally {
+      await cleanupDynamicCoverPath(coverBg);
+    }
 
     const skipPdf =
       process.env.SKIP_PDF === '1' || (process.env.VERCEL === '1' && process.env.ENABLE_PDF_ON_VERCEL !== '1');

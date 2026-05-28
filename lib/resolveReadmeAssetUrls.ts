@@ -24,11 +24,27 @@ export function resolveReadmeAssetUrls(
     },
   );
 
-  const imageExt = /\.(png|jpe?g|gif|svg|webp|ico|avif|bmp)(\?.*)?$/i;
+  out = out.replace(
+    /(<video\b[^>]*\ssrc=)(["'])([^"']+)\2/gi,
+    (match, prefix: string, quote: string, src: string) => {
+      if (!isResolvableRelativeUrl(src)) return match;
+      return `${prefix}${quote}${toRawUrl(src, base)}${quote}`;
+    },
+  );
+
+  out = out.replace(
+    /(<source\b[^>]*\ssrc=)(["'])([^"']+)\2/gi,
+    (match, prefix: string, quote: string, src: string) => {
+      if (!isResolvableRelativeUrl(src)) return match;
+      return `${prefix}${quote}${toRawUrl(src, base)}${quote}`;
+    },
+  );
+
+  const mediaExt = /\.(png|jpe?g|gif|svg|webp|ico|avif|bmp|mp4|webm|mov|m4v|avi)(\?.*)?$/i;
   out = out.replace(
     /(<a\b[^>]*\shref=)(["'])([^"']+)\2/gi,
     (match, prefix: string, quote: string, href: string) => {
-      if (!isResolvableRelativeUrl(href) || !imageExt.test(href)) return match;
+      if (!isResolvableRelativeUrl(href) || !mediaExt.test(href)) return match;
       return `${prefix}${quote}${toRawUrl(href, base)}${quote}`;
     },
   );

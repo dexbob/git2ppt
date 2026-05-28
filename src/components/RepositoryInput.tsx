@@ -6,14 +6,21 @@ type Props = {
   onChange: (v: string) => void;
   onSubmit: () => void;
   disabled: boolean;
+  focusSignal?: number;
 };
 
-export function RepositoryInput({ value, onChange, onSubmit, disabled }: Props) {
+export function RepositoryInput({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  focusSignal = 0,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+  }, [focusSignal]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

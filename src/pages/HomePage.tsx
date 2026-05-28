@@ -1,18 +1,24 @@
 import { motion } from 'framer-motion';
 import { Github } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnalysisProgress } from '../components/AnalysisProgress';
 import { DocumentPreview } from '../components/DocumentPreview';
 import { RepositoryInput } from '../components/RepositoryInput';
 import { ResultDownloadCard } from '../components/ResultDownloadCard';
 import { Footer } from '../components/Footer';
-import { isPipelineBusy, usePipelineStore } from '../store/pipelineStore';
+import {
+  isPipelineBusy,
+  resumeStepLabel,
+  usePipelineStore,
+} from '../store/pipelineStore';
 
 export function HomePage() {
   const {
     repoUrl,
     step,
+    failedStep,
     error,
+    analyzeTimeoutRetryMs,
     metadata,
     techSpecMarkdown,
     repoReadmeMarkdown,
@@ -31,10 +37,12 @@ export function HomePage() {
   const busy = isPipelineBusy(step);
   const progressRef = useRef<HTMLDivElement>(null);
   const prevStepRef = useRef(step);
+  const [inputFocusSignal, setInputFocusSignal] = useState(0);
 
   useEffect(() => {
-    const started = prevStepRef.current === 'idle' && step === 'analyzing';
-    const retried = prevStepRef.current === 'error' && step === 'analyzing';
+    const started = prevStepRef.current === 'idle' && step !== 'idle';
+    const retried =
+      prevStepRef.current === 'error' && step !== 'error' && step !== 'idle';
     prevStepRef.current = step;
     if (!started && !retried) return;
 
@@ -81,12 +89,14 @@ export function HomePage() {
             onChange={setRepoUrl}
             onSubmit={() => void runPipeline()}
             disabled={busy}
+            focusSignal={inputFocusSignal}
           />
 
           {step !== 'idle' && (
             <div ref={progressRef} className="scroll-mt-4">
               <AnalysisProgress
                 step={step}
+                failedStep={failedStep}
                 hasRepoReadme={Boolean(repoReadmeMarkdown?.trim())}
                 pdfAvailable={pdfAvailable}
                 pdfError={pdfError}
@@ -99,13 +109,31 @@ export function HomePage() {
             <div className="w-full space-y-3 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
               <p className="break-words">{error}</p>
               {step === 'error' && (
-                <button
-                  type="button"
-                  onClick={() => void runPipeline()}
-                  className="rounded-lg border border-red-400/40 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:bg-red-900/60"
-                >
-                  다시 시도
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void runPipeline()}
+                    className="rounded-lg border border-red-400/40 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:bg-red-900/60"
+                  >
+                    {failedStep ? `${resumeStepLabel(failedStep)} 재시도` : '다시 시도'}
+                  </button>
+                  {failedStep === 'analyzing' && analyzeTimeoutRetryMs != null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextSec = Math.round(analyzeTimeoutRetryMs / 1000);
+                        const ok = window.confirm(
+                          `저장소 스캔 제한시간을 ${nextSec}초로 늘려 재시도할까요?`,
+                        );
+                        if (!ok) return;
+                        void runPipeline({ analyzeTimeoutMs: analyzeTimeoutRetryMs });
+                      }}
+                      className="rounded-lg border border-amber-400/40 bg-amber-950/50 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-900/60"
+                    >
+                      +60초 늘려 재시도
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -121,7 +149,7 @@ export function HomePage() {
             />
           )}
 
-          {step === 'done' && (
+          {step !== 'idle' && (
             <ResultDownloadCard
               readme={readmeMarkdown}
               techSpec={techSpecMarkdown}
@@ -130,6 +158,7 @@ export function HomePage() {
               pdfAvailable={pdfAvailable}
               pdfError={pdfError}
               pdfNote={pdfNote}
+              zipEnabled={step === 'done'}
             />
           )}
         </div>
@@ -138,7 +167,10 @@ export function HomePage() {
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={() => reset()}
+              onClick={() => {
+                reset();
+                setInputFocusSignal((v) => v + 1);
+              }}
               className="text-sm text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
             >
               초기화

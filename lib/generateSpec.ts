@@ -1,6 +1,8 @@
 import type { RepositoryMetadata } from './types.js';
 import { JSON_RESPONSE_ERROR } from './formatUserFacingError.js';
 import { completeJsonText } from './llmCompleteJson.js';
+import { logJsonParseFailure } from './logJsonParseFailure.js';
+import { parseJsonWithRecovery } from './parseJsonWithRecovery.js';
 
 export type GenerateSpecResult = {
   techSpecMarkdown: string;
@@ -31,10 +33,9 @@ Output MUST be valid JSON with exactly one string field: "tech_spec_md". No mark
 
   let parsed: { tech_spec_md?: string };
   try {
-    parsed = JSON.parse(raw) as { tech_spec_md?: string };
+    parsed = parseJsonWithRecovery<{ tech_spec_md?: string }>(raw);
   } catch (parseErr) {
-    console.error('[generateSpec] JSON.parse failed:', parseErr);
-    console.error('[generateSpec] raw response:', raw);
+    logJsonParseFailure('generateSpec', raw, parseErr);
     throw new Error(JSON_RESPONSE_ERROR);
   }
   if (!parsed.tech_spec_md?.trim()) {

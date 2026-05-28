@@ -28,9 +28,9 @@ export function parseGithubRepoUrl(input: string): ParsedGithubRepo | null {
   }
 }
 
-export function buildCloneUrl(parsed: ParsedGithubRepo): string {
+export function buildCloneUrl(parsed: ParsedGithubRepo, useToken = true): string {
   const token = process.env.GITHUB_TOKEN?.trim();
   const base = `https://github.com/${parsed.owner}/${parsed.repo}.git`;
-  if (!token) return base;
+  if (!useToken || !token) return base;
   return `https://${encodeURIComponent(token)}@github.com/${parsed.owner}/${parsed.repo}.git`;
 }

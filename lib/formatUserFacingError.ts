@@ -16,6 +16,12 @@ export function formatUserFacingError(err: unknown, fallback: string): string {
   if (/502|504|gateway|timed out|timeout|ETIMEDOUT|ECONNRESET/i.test(raw)) {
     return `AI 서비스 응답이 지연되었습니다. ${RETRY_HINT}`;
   }
+  if (/저장소 용량 또는 네트워크 상태로 인해 .*초 내 스캔을 완료하지 못했습니다\./i.test(raw)) {
+    return raw;
+  }
+  if (/this operation was aborted/i.test(raw)) {
+    return '저장소 용량이 크거나 네트워크가 지연되어 제한시간 내 스캔을 완료하지 못했습니다.';
+  }
   if (/JSON 파싱|invalid json|unexpected token/i.test(raw)) {
     return `AI 응답 형식 오류로 결과를 만들지 못했습니다. ${RETRY_HINT} (반복되면 GEMINI_MODEL 변경을 고려해 보세요.)`;
   }

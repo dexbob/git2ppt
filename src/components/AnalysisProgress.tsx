@@ -12,7 +12,7 @@ import {
   resolvePdfSummaryMessage,
   type PdfOutcome,
 } from '@lib/pdfClientStatus';
-import type { PipelineStep } from '../store/pipelineStore';
+import type { PipelineStep, PipelineWorkStep } from '../store/pipelineStore';
 
 type StepKey = 'analyzing' | 'readme' | 'spec' | 'slides-ppt' | 'slides-pdf';
 
@@ -26,6 +26,7 @@ const STEPS: { key: StepKey; label: string }[] = [
 
 type Props = {
   step: PipelineStep;
+  failedStep: PipelineWorkStep | null;
   hasRepoReadme: boolean;
   pdfAvailable: boolean;
   pdfError: string | null;
@@ -42,14 +43,43 @@ function pipelineActiveIndex(step: PipelineStep): number {
   return -1;
 }
 
+function failedStepIndex(failedStep: PipelineWorkStep | null): number {
+  switch (failedStep) {
+    case 'analyzing':
+      return 0;
+    case 'readme':
+      return 1;
+    case 'spec':
+      return 2;
+    case 'slides':
+      return 3;
+    default:
+      return -1;
+  }
+}
+
 type CardVisual =
   | 'pending'
   | 'current'
   | 'done'
   | 'skipped'
+  | 'failed'
   | 'pdf_done'
   | 'pdf_skipped'
   | 'pdf_failed';
+
+function cardVisualOnError(
+  idx: number,
+  failedIdx: number,
+  hasRepoReadme: boolean,
+): CardVisual {
+  if (idx === 4) return 'pending';
+  if (idx === 1 && !hasRepoReadme) return 'skipped';
+  if (failedIdx < 0) return 'pending';
+  if (idx < failedIdx) return 'done';
+  if (idx === failedIdx) return 'failed';
+  return 'pending';
+}
 
 function cardVisual(
   idx: number,
@@ -57,8 +87,12 @@ function cardVisual(
   active: number,
   pdfOutcome: PdfOutcome,
   readmeSkipped: boolean,
+  failedStep: PipelineWorkStep | null,
+  hasRepoReadme: boolean,
 ): CardVisual {
-  if (step === 'error') return idx < active ? 'done' : 'pending';
+  if (step === 'error') {
+    return cardVisualOnError(idx, failedStepIndex(failedStep), hasRepoReadme);
+  }
 
   if (idx === 1 && readmeSkipped && active > 1) return 'skipped';
 
@@ -81,8 +115,7 @@ function cardVisual(
   return 'pdf_skipped';
 }
 
-function cardClass(visual: CardVisual, pipelineError: boolean): string {
-  if (pipelineError) return 'border-red-500/40 bg-red-950/20';
+function cardClass(visual: CardVisual): string {
   switch (visual) {
     case 'current':
       return 'border-accent-cyan/60 bg-slate-900/80 shadow-lg shadow-accent-cyan/10';
@@ -94,6 +127,8 @@ function cardClass(visual: CardVisual, pipelineError: boolean): string {
       return 'border-amber-500/40 bg-amber-950/20';
     case 'pdf_failed':
       return 'border-amber-500/45 bg-amber-950/25';
+    case 'failed':
+      return 'border-red-500/50 bg-red-950/30';
     default:
       return 'border-slate-800 bg-slate-950/40';
   }
@@ -106,6 +141,8 @@ function StepIcon({ visual }: { visual: CardVisual }) {
       return <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
     case 'current':
       return <Loader2 className="h-5 w-5 animate-spin text-accent-cyan" />;
+    case 'failed':
+      return <XCircle className="h-5 w-5 text-red-400" />;
     case 'skipped':
     case 'pdf_skipped':
       return <AlertTriangle className="h-5 w-5 text-amber-400" />;
@@ -118,13 +155,13 @@ function StepIcon({ visual }: { visual: CardVisual }) {
 
 export function AnalysisProgress({
   step,
+  failedStep,
   hasRepoReadme,
   pdfAvailable,
   pdfError,
   pdfNote,
 }: Props) {
   const active = pipelineActiveIndex(step);
-  const isPipelineError = step === 'error';
   const readmeSkipped = !hasRepoReadme && active > 1;
   const pdfOutcome = resolvePdfOutcome(pdfAvailable, pdfError);
   const pdfSummary = resolvePdfSummaryMessage(pdfAvailable, pdfError, pdfNote);
@@ -135,14 +172,22 @@ export function AnalysisProgress({
     <section className="w-full space-y-3">
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {STEPS.map((s, idx) => {
-          const visual = cardVisual(idx, step, active, pdfOutcome, readmeSkipped);
+          const visual = cardVisual(
+            idx,
+            step,
+            active,
+            pdfOutcome,
+            readmeSkipped,
+            failedStep,
+            hasRepoReadme,
+          );
           return (
             <motion.div
               key={s.key}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
-              className={`rounded-2xl border px-4 py-4 ${cardClass(visual, isPipelineError)}`}
+              className={`rounded-2xl border px-4 py-4 ${cardClass(visual)}`}
             >
               <div className="flex items-center gap-2">
                 <StepIcon visual={visual} />
