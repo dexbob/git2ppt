@@ -5,6 +5,7 @@
 ## 1.5.0
 
 - **저장소 수집 최적화(대용량 미디어 대응)** — `git clone`에 `--filter=blob:none --sparse --no-checkout`을 적용하고 `sparse-checkout` 패턴으로 텍스트/분석 대상 위주 파일만 checkout 하도록 변경. 이미지/영상 비중이 큰 공개 저장소에서 초기 수집량과 지연을 크게 완화.
+- **Vercel 분석 경로 안정화** — Vercel 환경에서는 `git` 실행 의존성(`spawn git ENOENT`)을 피하기 위해 저장소 분석을 ZIP/API 경로로 수행하고, 로컬/일반 서버에서는 기존 clone 최적화 경로를 유지.
 - **분석 실패 정책 정교화** — 무토큰 1차 시도 실패 시, 일반 오류에서만 토큰 fallback 실행. 타임아웃 실패는 토큰 fallback을 건너뛰고 즉시 타임아웃 오류(`AnalyzeTimeoutError`)로 종료해 사용자가 `+60초` 재시도를 선택하도록 흐름 정리.
 - **분석 타임아웃 재시도 UX** — `/api/analyze-repo`가 타임아웃 시 `408 ANALYZE_TIMEOUT`과 `timeoutMs`를 반환하고, 프론트에서 “+60초 늘려 재시도” 버튼으로 같은 실패 단계부터 재실행.
 - **README 자산 URL 보정 확장** — 상대 경로 보정 대상을 이미지뿐 아니라 `<video>`, `<source>`, 영상 확장자 링크(`.mp4`, `.webm`, `.mov` 등)까지 확장해 공개 repo README 미디어 렌더 안정성 개선.

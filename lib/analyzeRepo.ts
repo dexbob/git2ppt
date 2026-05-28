@@ -76,6 +76,18 @@ async function runAnalyzeAttempt(
   }
 }
 
+async function runZipAnalyzeAttempt(
+  parsed: ParsedGithubRepo,
+  timeoutMs: number,
+): Promise<RepositoryMetadata> {
+  const { repoDir, cleanupRoot } = await downloadGithubRepoZip(parsed, { timeoutMs });
+  try {
+    return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
+  } finally {
+    await removeCloneDir(cleanupRoot).catch(() => undefined);
+  }
+}
+
 export async function analyzeGithubRepository(
   repoUrl: string,
   options?: AnalyzeRepoOptions,
@@ -86,6 +98,17 @@ export async function analyzeGithubRepository(
   }
 
   const timeoutMs = options?.cloneTimeoutMs ?? Number(process.env.GIT_CLONE_TIMEOUT_MS ?? 120_000);
+  if (process.env.VERCEL === '1') {
+    try {
+      return await withAnalyzeTimeout(runZipAnalyzeAttempt(parsed, timeoutMs), timeoutMs);
+    } catch (err) {
+      if (err instanceof AnalyzeTimeoutError || isTimeoutLikeError(err)) {
+        throw new AnalyzeTimeoutError(timeoutMs);
+      }
+      throw err instanceof Error ? err : new Error('저장소 분석에 실패했습니다.');
+    }
+  }
+
   const tokenExists = Boolean(process.env.GITHUB_TOKEN?.trim());
   const startedAt = Date.now();
   let firstError: unknown = null;
@@ -136,10 +159,6 @@ export async function analyzeGithubRepositoryWithZipFallback(
   if (!parsed) {
     throw new Error('유효한 GitHub HTTPS URL이 아닙니다. (예: https://github.com/owner/repo)');
   }
-  const { repoDir, cleanupRoot } = await downloadGithubRepoZip(parsed);
-  try {
-    return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
-  } finally {
-    await removeCloneDir(cleanupRoot).catch(() => undefined);
-  }
+  const timeoutMs = Number(process.env.GITHUB_ZIP_TIMEOUT_MS ?? 120_000);
+  return await runZipAnalyzeAttempt(parsed, timeoutMs);
 }

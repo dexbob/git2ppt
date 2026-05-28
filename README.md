@@ -22,7 +22,7 @@ GitHub URL 하나로 저장소를 분석하고, AI가 기술명세서와 발표 
 
 개발자가 낯선 저장소를 **빠르게 이해하고 발표 자료까지** 준비하는 시간을 줄이는 것이 목표입니다. 웹 화면에서 공개(또는 `GITHUB_TOKEN`으로 접근 가능한) GitHub 저장소 HTTPS URL을 넣고 **「분석 및 자료 생성」** (또는 Enter)을 실행하면, 서버가 아래를 **순서대로** 수행합니다.
 
-1. **저장소 가져오기·분석** — 기본은 `git` shallow clone(무토큰)이며, `partial clone(--filter=blob:none) + sparse checkout`으로 텍스트 위주 파일만 받아 대용량 이미지/영상 다운로드를 최소화합니다. 실패 시 `GITHUB_TOKEN`이 설정되어 있으면 자동으로 토큰 인증 clone을 재시도합니다(단, 타임아웃 실패는 즉시 종료 후 시간 증가 재시도 경로). `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스 스니펫을 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 **메타데이터(JSON)** 로 정리합니다. 루트 `README.md` 원문을 추출하고, 상대 경로 이미지·영상은 GitHub raw URL로 보정합니다.
+1. **저장소 가져오기·분석** — 로컬/일반 서버에서는 `git` shallow clone(무토큰) + `partial clone(--filter=blob:none) + sparse checkout`으로 텍스트 위주 파일만 받아 대용량 이미지/영상 다운로드를 최소화합니다. 실패 시 `GITHUB_TOKEN`이 설정되어 있으면 자동으로 토큰 인증 clone을 재시도합니다(단, 타임아웃 실패는 즉시 종료 후 시간 증가 재시도 경로). Vercel 환경(`VERCEL=1`)에서는 `git` 의존성을 피하기 위해 GitHub ZIP/API 방식으로 분석합니다. `package.json`, `README.md`, `Dockerfile`, `vite.config.ts` 등 우선 파일과 디렉터리 트리·일부 소스 스니펫을 스캔해, 프론트/백엔드/상태관리/배포/DB·AI API 사용 여부 등을 **메타데이터(JSON)** 로 정리합니다. 루트 `README.md` 원문을 추출하고, 상대 경로 이미지·영상은 GitHub raw URL로 보정합니다.
 2. **README 번역** (README가 있을 때) — 원문 README를 LLM으로 **한국어 전체 번역**합니다. 구조·배지·HTML·코드는 유지하고, prose만 번역합니다.
 3. **기술명세 생성** — 스캔 결과를 바탕으로 LLM이 **마크다운 기술명세**(`tech_spec.md` 성격)만 작성합니다. [`reference/instruction.md`](reference/instruction.md)가 비어 있지 않으면 추가 인스트럭션으로 사용합니다(`INSTRUCTION_FILE`로 경로 변경 가능).
 4. **발표용 슬라이드** — 기술명세와 **번역 README**(없으면 원문)를 입력으로 슬라이드 구조(JSON)를 만든 뒤 **PPTX**로 렌더링합니다. LibreOffice(`soffice`)가 있는 환경에서는 **PDF** 변환도 시도합니다.
@@ -152,9 +152,10 @@ chmod +x start_server.sh   # 최초 1회
 
 | 단계 | 방식 |
 |------|------|
-| 1차 시도(기본) | `git` shallow clone + `--filter=blob:none` + `--sparse` (`lib/cloneRepo.ts`) — 토큰 없이 시도 |
-| 2차 시도(자동) | 1차 실패가 일반 오류일 때 + `GITHUB_TOKEN` 존재 시 토큰 인증 clone 재시도 |
-| 타임아웃 실패 | 토큰 fallback 없이 종료 후, UI에서 `+60초 늘려 재시도` 안내 |
+| 로컬/일반 서버 1차 시도(기본) | `git` shallow clone + `--filter=blob:none` + `--sparse` (`lib/cloneRepo.ts`) — 토큰 없이 시도 |
+| 로컬/일반 서버 2차 시도(자동) | 1차 실패가 일반 오류일 때 + `GITHUB_TOKEN` 존재 시 토큰 인증 clone 재시도 |
+| Vercel 환경 | GitHub ZIP/API 방식으로 분석 (`lib/downloadGithubZip.ts`) |
+| 타임아웃 실패 | 현재 방식 내 fallback 없이 종료 후, UI에서 `+60초 늘려 재시도` 안내 |
 
 클론 임시 디렉터리는 분석 후 삭제됩니다.
 
@@ -181,8 +182,8 @@ chmod +x start_server.sh   # 최초 1회
 | 변수 | 설명 |
 |------|------|
 | `GITHUB_TOKEN` | 비공개 저장소·rate limit |
-| `GIT_CLONE_TIMEOUT_MS` | 저장소 분석(클론+스캔) 타임아웃 기준 (기본 `120000`) |
-| `GITHUB_ZIP_TIMEOUT_MS` | GitHub 메타 API 조회 타임아웃 (기본 `120000`) |
+| `GIT_CLONE_TIMEOUT_MS` | 저장소 분석 타임아웃 기준 (기본 `120000`) |
+| `GITHUB_ZIP_TIMEOUT_MS` | ZIP/API 다운로드 및 메타 조회 타임아웃 (기본 `120000`) |
 | `INSTRUCTION_FILE` | 기술명세 인스트럭션 경로 (기본 `reference/instruction.md`) |
 
 ### 서버
@@ -223,7 +224,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
 2. 환경 변수: `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
-3. 저장소 수집은 기본적으로 `git` shallow clone(무토큰 우선, 실패 시 토큰 재시도) 방식
+3. 저장소 수집은 로컬에서는 `git` clone(무토큰 우선, 실패 시 토큰 재시도), Vercel에서는 ZIP/API 방식
 4. LibreOffice 없음 → **PDF 기본 비활성** (`pdfAvailable: false`, `pdfNote`로 안내). PPTX·마크다운은 동일
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
 

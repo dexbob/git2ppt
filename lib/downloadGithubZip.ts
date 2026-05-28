@@ -12,16 +12,20 @@ export type ZipDownloadResult = {
 
 const ZIP_TIMEOUT_MS = Number(process.env.GITHUB_ZIP_TIMEOUT_MS ?? 120_000);
 
-export async function downloadGithubRepoZip(parsed: ParsedGithubRepo): Promise<ZipDownloadResult> {
+export async function downloadGithubRepoZip(
+  parsed: ParsedGithubRepo,
+  options?: { timeoutMs?: number },
+): Promise<ZipDownloadResult> {
   const token = process.env.GITHUB_TOKEN?.trim();
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'git2ppt',
   };
   if (token) headers.Authorization = `Bearer ${token}`;
+  const timeoutMs = options?.timeoutMs ?? ZIP_TIMEOUT_MS;
 
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), ZIP_TIMEOUT_MS);
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const metaRes = await fetch(
       `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`,
