@@ -2,16 +2,22 @@ import type { ParsedGithubRepo, RepositoryMetadata } from './types.js';
 import { parseGithubRepoUrl } from './github.js';
 import { cloneGithubRepo, removeCloneDir } from './cloneRepo.js';
 import { downloadGithubRepoZip } from './downloadGithubZip.js';
+import { collectRepoViaApi } from './githubApiCollect.js';
 import { fetchGithubRepoMeta } from './githubOwnerProfile.js';
-import { scanRepository } from './scanRepo.js';
+import { scanRepository, type ScanOptions } from './scanRepo.js';
+
+const DEFAULT_ATTEMPT_TIMEOUT_MS = Number(process.env.GIT_CLONE_TIMEOUT_MS ?? 120_000);
+/** 일시적 오류 시 같은 방식으로 재시도하기 전 대기(ms) */
+const TRANSIENT_RETRY_DELAY_MS = 800;
 
 async function scanWithOwnerProfile(
   repoDir: string,
   repoUrl: string,
   parsed: ParsedGithubRepo,
+  scanOptions?: ScanOptions,
 ): Promise<RepositoryMetadata> {
   const [metadata, repoMeta] = await Promise.all([
-    scanRepository(repoDir, repoUrl, parsed),
+    scanRepository(repoDir, repoUrl, parsed, scanOptions),
     fetchGithubRepoMeta(parsed),
   ]);
   return {
@@ -21,32 +27,28 @@ async function scanWithOwnerProfile(
   };
 }
 
-export class AnalyzeTimeoutError extends Error {
-  timeoutMs: number;
-
-  constructor(timeoutMs: number) {
-    super(
-      `저장소 용량 또는 네트워크 상태로 인해 ${Math.round(timeoutMs / 1000)}초 내 스캔을 완료하지 못했습니다.`,
-    );
-    this.name = 'AnalyzeTimeoutError';
-    this.timeoutMs = timeoutMs;
-  }
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-type AnalyzeRepoOptions = {
-  cloneTimeoutMs?: number;
-};
-
-function isTimeoutLikeError(err: unknown): boolean {
+function isTransientError(err: unknown): boolean {
   const raw = err instanceof Error ? err.message : String(err ?? '');
-  return /timed out|timeout|ETIMEDOUT|ECONNRESET|aborted/i.test(raw);
+  return /\b50\d\b|\b429\b|timeout|timed out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|network|fetch failed|aborted|secondary rate|rate limit/i.test(
+    raw,
+  );
 }
 
-async function withAnalyzeTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
-  return await new Promise<T>((resolve, reject) => {
+/** 인증 누락 등 재시도/대체 방식으로도 해결되지 않는 치명적 오류 */
+function isFatalError(err: unknown): boolean {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  return /유효한 GitHub HTTPS URL이 아닙니다|저장소를 찾을 수 없습니다/.test(raw);
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => {
-      reject(new AnalyzeTimeoutError(timeoutMs));
-    }, timeoutMs);
+      reject(new Error(`${label} 제한시간(${Math.round(ms / 1000)}초)을 초과했습니다.`));
+    }, ms);
     work.then(
       (value) => {
         clearTimeout(t);
@@ -60,15 +62,28 @@ async function withAnalyzeTimeout<T>(work: Promise<T>, timeoutMs: number): Promi
   });
 }
 
-async function runAnalyzeAttempt(
+async function attemptApi(
   parsed: ParsedGithubRepo,
   timeoutMs: number,
   useToken: boolean,
 ): Promise<RepositoryMetadata> {
-  const { repoDir, cleanupRoot } = await cloneGithubRepo(parsed, {
-    timeoutMs,
-    useToken,
-  });
+  const collected = await collectRepoViaApi(parsed, { timeoutMs, useToken });
+  try {
+    return await scanWithOwnerProfile(collected.repoDir, parsed.webUrl, parsed, {
+      defaultBranch: collected.defaultBranch,
+      treeSample: collected.treeSample,
+    });
+  } finally {
+    await removeCloneDir(collected.cleanupRoot).catch(() => undefined);
+  }
+}
+
+async function attemptClone(
+  parsed: ParsedGithubRepo,
+  timeoutMs: number,
+  useToken: boolean,
+): Promise<RepositoryMetadata> {
+  const { repoDir, cleanupRoot } = await cloneGithubRepo(parsed, { timeoutMs, useToken });
   try {
     return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
   } finally {
@@ -76,89 +91,91 @@ async function runAnalyzeAttempt(
   }
 }
 
-async function runZipAnalyzeAttempt(
+async function attemptZip(
   parsed: ParsedGithubRepo,
   timeoutMs: number,
 ): Promise<RepositoryMetadata> {
-  const { repoDir, cleanupRoot } = await downloadGithubRepoZip(parsed, { timeoutMs });
+  const { repoDir, cleanupRoot, defaultBranch } = await downloadGithubRepoZip(parsed, {
+    timeoutMs,
+  });
   try {
-    return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed);
+    return await scanWithOwnerProfile(repoDir, parsed.webUrl, parsed, { defaultBranch });
   } finally {
     await removeCloneDir(cleanupRoot).catch(() => undefined);
   }
 }
 
-export async function analyzeGithubRepository(
-  repoUrl: string,
-  options?: AnalyzeRepoOptions,
-): Promise<RepositoryMetadata> {
+type Attempt = {
+  label: string;
+  run: () => Promise<RepositoryMetadata>;
+};
+
+/**
+ * 저장소를 분석한다.
+ *
+ * 기본 경로: GitHub Tree+blob API (git 불필요, 로컬·Vercel 공통).
+ * 안전망: git clone(로컬 전용) → GitHub ZIP. 앞 방식이 실패하면 자동으로 다음 방식으로
+ * 넘어가며(정보성 로그만 남김), 모든 방식이 실패할 때만 오류를 던진다.
+ */
+export async function analyzeGithubRepository(repoUrl: string): Promise<RepositoryMetadata> {
   const parsed = parseGithubRepoUrl(repoUrl);
   if (!parsed) {
     throw new Error('유효한 GitHub HTTPS URL이 아닙니다. (예: https://github.com/owner/repo)');
   }
 
-  const timeoutMs = options?.cloneTimeoutMs ?? Number(process.env.GIT_CLONE_TIMEOUT_MS ?? 120_000);
-  if (process.env.VERCEL === '1') {
-    try {
-      return await withAnalyzeTimeout(runZipAnalyzeAttempt(parsed, timeoutMs), timeoutMs);
-    } catch (err) {
-      if (err instanceof AnalyzeTimeoutError || isTimeoutLikeError(err)) {
-        throw new AnalyzeTimeoutError(timeoutMs);
-      }
-      throw err instanceof Error ? err : new Error('저장소 분석에 실패했습니다.');
-    }
-  }
-
+  const timeoutMs = DEFAULT_ATTEMPT_TIMEOUT_MS;
   const tokenExists = Boolean(process.env.GITHUB_TOKEN?.trim());
-  const startedAt = Date.now();
-  let firstError: unknown = null;
-  let finalError: unknown = null;
+  const onVercel = process.env.VERCEL === '1';
 
-  const remainingMs = (): number => timeoutMs - (Date.now() - startedAt);
-  const currentBudget = (): number => {
-    const left = remainingMs();
-    if (left <= 0) throw new AnalyzeTimeoutError(timeoutMs);
-    return left;
-  };
-
-  try {
-    const budget = currentBudget();
-    return await withAnalyzeTimeout(runAnalyzeAttempt(parsed, budget, false), budget);
-  } catch (err) {
-    firstError = err;
+  const attempts: Attempt[] = [
+    {
+      label: 'GitHub API(tree+blob)',
+      run: () => withTimeout(attemptApi(parsed, timeoutMs, tokenExists), timeoutMs, 'API 수집'),
+    },
+  ];
+  // git 바이너리가 보장되지 않는 Vercel에서는 clone을 건너뛴다.
+  if (!onVercel) {
+    attempts.push({
+      label: 'git clone',
+      run: () => withTimeout(attemptClone(parsed, timeoutMs, tokenExists), timeoutMs, 'clone'),
+    });
   }
+  attempts.push({
+    label: 'GitHub ZIP',
+    run: () => withTimeout(attemptZip(parsed, timeoutMs), timeoutMs, 'ZIP'),
+  });
 
-  // 정책: 무토큰 clone 시도가 "시간 초과"로 끝난 경우 토큰 fallback을 타지 않는다.
-  // 바로 +1분 재시도 안내 흐름으로 보낸다.
-  if (firstError instanceof AnalyzeTimeoutError || isTimeoutLikeError(firstError)) {
-    throw new AnalyzeTimeoutError(timeoutMs);
-  }
-
-  if (tokenExists) {
+  let lastError: unknown = null;
+  for (const attempt of attempts) {
     try {
-      const budget = currentBudget();
-      return await withAnalyzeTimeout(runAnalyzeAttempt(parsed, budget, true), budget);
+      return await attempt.run();
     } catch (err) {
-      finalError = err;
+      lastError = err;
+      if (isFatalError(err)) {
+        throw err instanceof Error ? err : new Error('저장소 분석에 실패했습니다.');
+      }
+      // 일시적 오류면 같은 방식으로 한 번 더 가볍게 재시도한다.
+      if (isTransientError(err)) {
+        try {
+          await delay(TRANSIENT_RETRY_DELAY_MS);
+          return await attempt.run();
+        } catch (retryErr) {
+          lastError = retryErr;
+          if (isFatalError(retryErr)) {
+            throw retryErr instanceof Error
+              ? retryErr
+              : new Error('저장소 분석에 실패했습니다.');
+          }
+        }
+      }
+      console.warn(
+        `[analyzeRepo] '${attempt.label}' 수집 실패 → 다음 방식으로 진행:`,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 
-  if (finalError instanceof AnalyzeTimeoutError || isTimeoutLikeError(finalError)) {
-    throw new AnalyzeTimeoutError(timeoutMs);
-  }
-
-  const errToThrow = finalError ?? firstError;
-  throw errToThrow instanceof Error ? errToThrow : new Error('저장소 분석에 실패했습니다.');
-}
-
-// Legacy: kept for optional/manual diagnostics.
-export async function analyzeGithubRepositoryWithZipFallback(
-  repoUrl: string,
-): Promise<RepositoryMetadata> {
-  const parsed = parseGithubRepoUrl(repoUrl);
-  if (!parsed) {
-    throw new Error('유효한 GitHub HTTPS URL이 아닙니다. (예: https://github.com/owner/repo)');
-  }
-  const timeoutMs = Number(process.env.GITHUB_ZIP_TIMEOUT_MS ?? 120_000);
-  return await runZipAnalyzeAttempt(parsed, timeoutMs);
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('저장소 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.');
 }

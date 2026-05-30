@@ -8,6 +8,8 @@ export type ZipDownloadResult = {
   repoDir: string;
   /** Directory to delete after scan (extract root) */
   cleanupRoot: string;
+  /** Repository default branch resolved from the GitHub API */
+  defaultBranch: string;
 };
 
 const ZIP_TIMEOUT_MS = Number(process.env.GITHUB_ZIP_TIMEOUT_MS ?? 120_000);
@@ -55,7 +57,7 @@ export async function downloadGithubRepoZip(
       throw new Error('ZIP 구조를 해석할 수 없습니다.');
     }
     const repoDir = path.join(tmp, entries[0]!);
-    return { repoDir, cleanupRoot: tmp };
+    return { repoDir, cleanupRoot: tmp, defaultBranch: branch };
   } finally {
     clearTimeout(t);
   }

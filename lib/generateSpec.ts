@@ -1,11 +1,26 @@
 import type { RepositoryMetadata } from './types.js';
 import { JSON_RESPONSE_ERROR } from './formatUserFacingError.js';
-import { completeJsonText } from './llmCompleteJson.js';
+import { completeJsonText, type LlmSchema } from './llmCompleteJson.js';
 import { logJsonParseFailure } from './logJsonParseFailure.js';
 import { parseJsonWithRecovery } from './parseJsonWithRecovery.js';
 
 export type GenerateSpecResult = {
   techSpecMarkdown: string;
+};
+
+const specSchema: LlmSchema = {
+  name: 'generate_spec',
+  schema: {
+    type: 'object',
+    properties: {
+      tech_spec_md: {
+        type: 'string',
+        description: '생성된 마크다운 포맷의 기술명세서 내용',
+      },
+    },
+    required: ['tech_spec_md'],
+    additionalProperties: false,
+  },
 };
 
 export async function generateRepositorySpec(
@@ -29,6 +44,7 @@ Output MUST be valid JSON with exactly one string field: "tech_spec_md". No mark
     system,
     user: `Repository data (JSON):\n${JSON.stringify(userPayload, null, 2)}`,
     temperature: 0.3,
+    responseSchema: specSchema,
   });
 
   let parsed: { tech_spec_md?: string };

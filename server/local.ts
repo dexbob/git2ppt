@@ -8,7 +8,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 import type { DetectedSignals, RepositoryMetadata } from '../lib/types.js';
 import { coverTagsFromSignals } from '../lib/coverTags.js';
-import { AnalyzeTimeoutError, analyzeGithubRepository } from '../lib/analyzeRepo.js';
+import { analyzeGithubRepository } from '../lib/analyzeRepo.js';
 import { generateSpecWithOpenAI } from '../lib/generateSpec.js';
 import { translateReadmeToKorean } from '../lib/translateReadme.js';
 import { loadInstructionFromFile } from '../lib/instructionFile.js';
@@ -44,24 +44,13 @@ app.use(express.json({ limit: '32mb' }));
 app.post('/api/analyze-repo', async (req, res) => {
   try {
     const url = req.body?.url as string | undefined;
-    const timeoutMsRaw = req.body?.timeoutMs;
-    const timeoutMs =
-      typeof timeoutMsRaw === 'number' && Number.isFinite(timeoutMsRaw) ? timeoutMsRaw : undefined;
     if (!url?.trim()) {
       res.status(400).json({ error: 'url이 필요합니다.' });
       return;
     }
-    const metadata = await analyzeGithubRepository(url.trim(), { cloneTimeoutMs: timeoutMs });
+    const metadata = await analyzeGithubRepository(url.trim());
     res.json({ metadata });
   } catch (err) {
-    if (err instanceof AnalyzeTimeoutError) {
-      res.status(408).json({
-        code: 'ANALYZE_TIMEOUT',
-        timeoutMs: err.timeoutMs,
-        error: err.message,
-      });
-      return;
-    }
     const message = err instanceof Error ? err.message : '저장소 분석에 실패했습니다.';
     res.status(500).json({ error: message });
   }

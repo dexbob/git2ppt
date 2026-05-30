@@ -24,7 +24,8 @@ type State = {
   /** 현재 산출물이 대응하는 저장소 URL (URL 변경 시 전체 재시작) */
   pipelineRepoUrl: string | null;
   error: string | null;
-  analyzeTimeoutRetryMs: number | null;
+  /** 일시적 오류로 재시도 진행 중일 때 사용자에게 노출할 정보성 메시지 */
+  infoMessage: string | null;
   metadata: RepositoryMetadata | null;
   techSpecMarkdown: string | null;
   /** 저장소 원본 README — 복제 직후 미리보기 */
@@ -39,7 +40,7 @@ type State = {
   slideDeck: SlideDeckSpec | null;
   setRepoUrl: (v: string) => void;
   reset: () => void;
-  runPipeline: (options?: { analyzeTimeoutMs?: number }) => Promise<void>;
+  runPipeline: () => Promise<void>;
 };
 
 const initial = {
@@ -48,7 +49,7 @@ const initial = {
   failedStep: null as PipelineWorkStep | null,
   pipelineRepoUrl: null as string | null,
   error: null as string | null,
-  analyzeTimeoutRetryMs: null as number | null,
+  infoMessage: null as string | null,
   metadata: null as RepositoryMetadata | null,
   techSpecMarkdown: null as string | null,
   repoReadmeMarkdown: null as string | null,
@@ -63,33 +64,48 @@ const initial = {
 
 const busySteps: PipelineStep[] = ['analyzing', 'readme', 'spec', 'slides'];
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    code?: string;
-    timeoutMs?: number;
-  } & T;
-  if (!res.ok) {
-    throw new ApiError(data.error ?? `요청 실패 (${res.status})`, data.code, data.timeoutMs);
-  }
-  return data as T;
-}
+async function postJsonWithRetry<T>(
+  path: string,
+  body: unknown,
+  stepLabel: string,
+  set: (state: Partial<State>) => void,
+): Promise<T> {
+  const retries = 3;
+  let backoffMs = 1500;
+  const factor = 2;
 
-class ApiError extends Error {
-  code?: string;
-  timeoutMs?: number;
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string } & T;
+      if (!res.ok) {
+        throw new Error(data.error ?? `요청 실패 (${res.status})`);
+      }
+      set({ infoMessage: null });
+      return data as T;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err ?? '');
+      const isTransient = /502|503|504|rate limit|quota|exhausted|overloaded|high demand|timeout|timed out|ETIMEDOUT|ECONNRESET/i.test(errMsg);
 
-  constructor(message: string, code?: string, timeoutMs?: number) {
-    super(message);
-    this.name = 'ApiError';
-    this.code = code;
-    this.timeoutMs = timeoutMs;
+      if (attempt > retries || !isTransient) {
+        set({ infoMessage: null });
+        throw err;
+      }
+
+      const countdownSec = Math.round(backoffMs / 1000);
+      set({
+        infoMessage: `[${stepLabel}] AI 서비스 사용량 혼잡 등으로 인해 ${countdownSec}초 후 자동으로 다시 시도합니다... (시도 ${attempt}/${retries})`,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      backoffMs *= factor;
+    }
   }
+  throw new Error('재시도 한도를 초과했습니다.');
 }
 
 function stepErrorHint(step: PipelineWorkStep): string {
@@ -223,7 +239,7 @@ export const usePipelineStore = create<State>((set, get) => ({
   ...initial,
   setRepoUrl: (v) => set({ repoUrl: v }),
   reset: () => set({ ...initial }),
-  runPipeline: async (options) => {
+  runPipeline: async () => {
     const state = get();
     if (busySteps.includes(state.step)) {
       return;
@@ -238,7 +254,6 @@ export const usePipelineStore = create<State>((set, get) => ({
       step: resumeFrom,
       error: null,
       failedStep: null,
-      analyzeTimeoutRetryMs: null,
       pipelineRepoUrl: trimmedUrl,
       ...downstreamClear(resumeFrom),
       ...(isFreshRun && resumeFrom === 'analyzing'
@@ -253,10 +268,12 @@ export const usePipelineStore = create<State>((set, get) => ({
       let { metadata, repoReadmeMarkdown, readmeMarkdown, techSpecMarkdown } = get();
 
       if (resumeFrom === 'analyzing' || !metadata) {
-        set({ step: 'analyzing' });
-        const { metadata: analyzed } = await postJson<{ metadata: RepositoryMetadata }>(
+        set({ step: 'analyzing', infoMessage: null });
+        const { metadata: analyzed } = await postJsonWithRetry<{ metadata: RepositoryMetadata }>(
           '/api/analyze-repo',
-          { url: trimmedUrl, timeoutMs: options?.analyzeTimeoutMs },
+          { url: trimmedUrl },
+          '저장소 분석',
+          set,
         );
         const rawReadme = extractRepoReadme(analyzed);
         metadata = analyzed;
@@ -266,10 +283,12 @@ export const usePipelineStore = create<State>((set, get) => ({
 
       if (needsReadmeTranslation(repoReadmeMarkdown)) {
         if (resumeFrom === 'analyzing' || resumeFrom === 'readme') {
-          set({ step: 'readme' });
-          const translateRes = await postJson<{ readmeMarkdown: string }>(
+          set({ step: 'readme', infoMessage: null });
+          const translateRes = await postJsonWithRetry<{ readmeMarkdown: string }>(
             '/api/translate-readme',
             { sourceMarkdown: repoReadmeMarkdown! },
+            'README 번역',
+            set,
           );
           readmeMarkdown = resolveReadmeAssetUrls(translateRes.readmeMarkdown, metadata!);
           set({ readmeMarkdown });
@@ -281,30 +300,38 @@ export const usePipelineStore = create<State>((set, get) => ({
       }
 
       if (resumeFrom === 'analyzing' || resumeFrom === 'readme' || resumeFrom === 'spec') {
-        set({ step: 'spec' });
-        const specRes = await postJson<{ techSpecMarkdown: string }>('/api/generate-spec', {
-          metadata: metadata!,
-        });
+        set({ step: 'spec', infoMessage: null });
+        const specRes = await postJsonWithRetry<{ techSpecMarkdown: string }>(
+          '/api/generate-spec',
+          { metadata: metadata! },
+          '기술명세서 생성',
+          set,
+        );
         techSpecMarkdown = specRes.techSpecMarkdown;
         set({ techSpecMarkdown });
       }
 
-      set({ step: 'slides' });
-      const slidesRes = await postJson<{
+      set({ step: 'slides', infoMessage: null });
+      const slidesRes = await postJsonWithRetry<{
         slideDeck: SlideDeckSpec;
         pptxBase64: string;
         pdfBase64: string | null;
         pdfAvailable: boolean;
         pdfError?: string | null;
         pdfNote?: string | null;
-      }>('/api/generate-slides', {
-        techSpecMarkdown: techSpecMarkdown ?? get().techSpecMarkdown!,
-        repoUrl: metadata!.repoUrl,
-        readmeMarkdown: readmeMarkdown ?? repoReadmeMarkdown,
-        ownerDisplayName: metadata!.ownerDisplayName,
-        detected: metadata!.detected,
-        githubTopics: metadata!.githubTopics,
-      });
+      }>(
+        '/api/generate-slides',
+        {
+          techSpecMarkdown: techSpecMarkdown ?? get().techSpecMarkdown!,
+          repoUrl: metadata!.repoUrl,
+          readmeMarkdown: readmeMarkdown ?? repoReadmeMarkdown,
+          ownerDisplayName: metadata!.ownerDisplayName,
+          detected: metadata!.detected,
+          githubTopics: metadata!.githubTopics,
+        },
+        '슬라이드 생성',
+        set,
+      );
       set({
         slideDeck: slidesRes.slideDeck,
         pptxBase64: slidesRes.pptxBase64,
@@ -325,21 +352,13 @@ export const usePipelineStore = create<State>((set, get) => ({
           : 'analyzing';
       const stepHint = stepErrorHint(workFailed);
       const base = formatUserFacingError(e, '알 수 없는 오류가 발생했습니다.');
-      const timeoutMs =
-        e instanceof ApiError && e.code === 'ANALYZE_TIMEOUT' ? e.timeoutMs ?? 120_000 : null;
-      const retryTimeoutMs = timeoutMs != null ? timeoutMs + 60_000 : null;
-      const timeoutPrompt =
-        timeoutMs != null
-          ? `\n현재 제한시간은 ${Math.round(timeoutMs / 1000)}초입니다. 60초 늘려 재시도할 수 있습니다.`
-          : '';
-      const mergedBase = `${base}${timeoutPrompt}`;
       const error =
-        stepHint && !mergedBase.includes(stepHint) ? `${stepHint} 단계: ${mergedBase}` : mergedBase;
+        stepHint && !base.includes(stepHint) ? `${stepHint} 단계: ${base}` : base;
       set({
         step: 'error',
         failedStep: workFailed,
         error,
-        analyzeTimeoutRetryMs: retryTimeoutMs,
+        infoMessage: null,
       });
     }
   },

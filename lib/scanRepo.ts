@@ -8,7 +8,7 @@ import type {
   RepositoryMetadata,
 } from './types.js';
 
-const PRIORITY_FILES = [
+export const PRIORITY_FILES = [
   'package.json',
   'requirements.txt',
   'README.md',
@@ -23,7 +23,7 @@ const PRIORITY_FILES = [
   'go.mod',
 ];
 
-const TEXT_EXTENSIONS = new Set([
+export const TEXT_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
   '.js',
@@ -45,7 +45,7 @@ const TEXT_EXTENSIONS = new Set([
   '.example',
 ]);
 
-const SKIP_DIR = new Set([
+export const SKIP_DIR = new Set([
   'node_modules',
   '.git',
   'dist',
@@ -249,13 +249,21 @@ async function collectSnippets(repoDir: string): Promise<PriorityFileSummary[]> 
   return summaries;
 }
 
+export type ScanOptions = {
+  /** API 등에서 미리 계산한 디렉터리 트리 샘플 (없으면 디스크에서 생성) */
+  treeSample?: string;
+  /** 이미 알고 있는 기본 브랜치 (없으면 .git/HEAD에서 추론) */
+  defaultBranch?: string;
+};
+
 export async function scanRepository(
   repoDir: string,
   repoUrl: string,
   parsed: ParsedGithubRepo,
+  options?: ScanOptions,
 ): Promise<RepositoryMetadata> {
   const priorityFileSummaries = await collectSnippets(repoDir);
-  const tree = await buildTreeSample(repoDir);
+  const tree = options?.treeSample ?? (await buildTreeSample(repoDir));
 
   let detected: DetectedSignals = {
     aiApis: [],
@@ -269,12 +277,14 @@ export async function scanRepository(
     detected.features = ['Repository analysis (auto)'];
   }
 
-  let defaultBranch = 'main';
-  const headPath = path.join(repoDir, '.git', 'HEAD');
-  if (await exists(headPath)) {
-    const head = await readTextSafe(headPath);
-    const m = head?.match(/ref: refs\/heads\/(.+)/);
-    if (m?.[1]) defaultBranch = m[1].trim();
+  let defaultBranch = options?.defaultBranch?.trim() || 'main';
+  if (!options?.defaultBranch) {
+    const headPath = path.join(repoDir, '.git', 'HEAD');
+    if (await exists(headPath)) {
+      const head = await readTextSafe(headPath);
+      const m = head?.match(/ref: refs\/heads\/(.+)/);
+      if (m?.[1]) defaultBranch = m[1].trim();
+    }
   }
 
   return {

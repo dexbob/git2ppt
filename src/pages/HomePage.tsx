@@ -18,7 +18,7 @@ export function HomePage() {
     step,
     failedStep,
     error,
-    analyzeTimeoutRetryMs,
+    infoMessage,
     metadata,
     techSpecMarkdown,
     repoReadmeMarkdown,
@@ -105,6 +105,13 @@ export function HomePage() {
             </div>
           )}
 
+          {infoMessage && (
+            <div className="w-full flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-200 animate-pulse">
+              <div className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+              <p className="break-words font-medium">{infoMessage}</p>
+            </div>
+          )}
+
           {error && (
             <div className="w-full space-y-3 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
               <p className="break-words">{error}</p>
@@ -117,22 +124,6 @@ export function HomePage() {
                   >
                     {failedStep ? `${resumeStepLabel(failedStep)} 재시도` : '다시 시도'}
                   </button>
-                  {failedStep === 'analyzing' && analyzeTimeoutRetryMs != null && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextSec = Math.round(analyzeTimeoutRetryMs / 1000);
-                        const ok = window.confirm(
-                          `저장소 스캔 제한시간을 ${nextSec}초로 늘려 재시도할까요?`,
-                        );
-                        if (!ok) return;
-                        void runPipeline({ analyzeTimeoutMs: analyzeTimeoutRetryMs });
-                      }}
-                      className="rounded-lg border border-amber-400/40 bg-amber-950/50 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-900/60"
-                    >
-                      +60초 늘려 재시도
-                    </button>
-                  )}
                 </div>
               )}
             </div>
