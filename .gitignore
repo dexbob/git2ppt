@@ -5,6 +5,11 @@ temp
 .env
 .env.local
 .env.*.local
+*.pem
 *.log
 .DS_Store
 .vercel
+
+# Cursor IDE
+.cursor/cache/
+.cursor/**/*.log
