@@ -19,9 +19,14 @@ function stderrFromExecError(err: unknown): string {
 }
 
 function describePdfFailure(err: unknown): string {
+  const hasCloudmersiveKey = Boolean(process.env.CLOUDMERSIVE_API_KEY?.trim());
+  
   if (err && typeof err === 'object') {
     const code = (err as { code?: string }).code;
     if (code === 'ENOENT') {
+      if (hasCloudmersiveKey) {
+        return 'PDF 변환에 실패했습니다. LibreOffice가 서버에 존재하지 않고, Cloudmersive API 변환 중 오류(일일 한도 초과 등)가 발생했습니다.';
+      }
       return 'PDF로 변환하지 못했습니다. soffice(LibreOffice) 실행 파일을 찾을 수 없습니다. 설치 후 필요하면 SOFFICE_PATH를 설정하세요.';
     }
     if ((err as { killed?: boolean }).killed) {
@@ -32,39 +37,107 @@ function describePdfFailure(err: unknown): string {
 }
 
 /**
+ * Converts PPTX Buffer to PDF Buffer using Cloudmersive Document Conversion API.
+ */
+async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
+  const apiKey = process.env.CLOUDMERSIVE_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('CLOUDMERSIVE_API_KEY가 설정되어 있지 않습니다.');
+  }
+
+  const formData = new FormData();
+  // Native Blob in Node.js 18+
+  const blob = new Blob([new Uint8Array(pptxBuffer)], {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  });
+  formData.append('inputFile', blob, 'slides.pptx');
+
+  const response = await fetch('https://api.cloudmersive.com/convert/pptx/to/pdf', {
+    method: 'POST',
+    headers: {
+      Apikey: apiKey,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Cloudmersive API 변환 실패 (HTTP ${response.status}): ${errorText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
  * Converts PPTX to PDF using LibreOffice headless when available.
+ * Fallback to Cloudmersive API if LibreOffice is missing and CLOUDMERSIVE_API_KEY is configured.
  * On failure, `pdf` is null and `error` is a short user-facing message.
  */
 export async function convertPptxBufferToPdf(pptxBuffer: Buffer): Promise<PptxToPdfResult> {
   const soffice = process.env.SOFFICE_PATH?.trim() || 'soffice';
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git2ppt-pdf-'));
-  const pptxPath = path.join(tmp, 'slides.pptx');
-  await fs.writeFile(pptxPath, pptxBuffer);
-  try {
-    await execFileAsync(
-      soffice,
-      [
-        '--headless',
-        '--invisible',
-        '--nologo',
-        '--nofirststartwizard',
-        '--convert-to',
-        'pdf',
-        '--outdir',
-        tmp,
-        pptxPath,
-      ],
-      { timeout: CONVERT_MS, maxBuffer: 50 * 1024 * 1024 },
-    );
-    const pdfPath = path.join(tmp, 'slides.pdf');
-    const pdf = await fs.readFile(pdfPath);
-    return { pdf, error: null };
-  } catch (err) {
-    const stderr = stderrFromExecError(err);
-    // eslint-disable-next-line no-console
-    console.warn('[git2ppt] LibreOffice PDF 변환 실패:', err instanceof Error ? err.message : err, stderr || '');
-    return { pdf: null, error: describePdfFailure(err) };
-  } finally {
-    await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git2ppt-pdf-')).catch(() => null);
+
+  if (tmp) {
+    const pptxPath = path.join(tmp, 'slides.pptx');
+    try {
+      await fs.writeFile(pptxPath, pptxBuffer);
+      await execFileAsync(
+        soffice,
+        [
+          '--headless',
+          '--invisible',
+          '--nologo',
+          '--nofirststartwizard',
+          '--convert-to',
+          'pdf',
+          '--outdir',
+          tmp,
+          pptxPath,
+        ],
+        { timeout: CONVERT_MS, maxBuffer: 50 * 1024 * 1024 },
+      );
+      const pdfPath = path.join(tmp, 'slides.pdf');
+      const pdf = await fs.readFile(pdfPath);
+      return { pdf, error: null };
+    } catch (err) {
+      const isNoent = err && typeof err === 'object' && (err as { code?: string }).code === 'ENOENT';
+      if (!isNoent) {
+        const stderr = stderrFromExecError(err);
+        // eslint-disable-next-line no-console
+        console.warn('[git2ppt] LibreOffice PDF 변환 실패:', err instanceof Error ? err.message : err, stderr || '');
+      }
+
+      // Fallback to Cloudmersive
+      const cloudmersiveKey = process.env.CLOUDMERSIVE_API_KEY?.trim();
+      if (cloudmersiveKey) {
+        try {
+          // eslint-disable-next-line no-console
+          console.info('[git2ppt] LibreOffice를 사용할 수 없거나 실패하여 Cloudmersive API로 PDF 변환을 시도합니다.');
+          const pdf = await convertViaCloudmersive(pptxBuffer);
+          return { pdf, error: null };
+        } catch (apiErr) {
+          // eslint-disable-next-line no-console
+          console.error('[git2ppt] Cloudmersive API 변환 실패:', apiErr);
+        }
+      }
+
+      return { pdf: null, error: describePdfFailure(err) };
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+    }
+  } else {
+    // If temp dir creation failed, try Cloudmersive directly as last resort
+    const cloudmersiveKey = process.env.CLOUDMERSIVE_API_KEY?.trim();
+    if (cloudmersiveKey) {
+      try {
+        const pdf = await convertViaCloudmersive(pptxBuffer);
+        return { pdf, error: null };
+      } catch (apiErr) {
+        // eslint-disable-next-line no-console
+        console.error('[git2ppt] Cloudmersive API 변환 실패:', apiErr);
+      }
+    }
+    return { pdf: null, error: '임시 폴더를 생성할 수 없어 PDF 변환에 실패했습니다.' };
   }
 }

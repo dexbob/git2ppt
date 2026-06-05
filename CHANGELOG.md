@@ -8,6 +8,8 @@
 - **환경 변수 체계 개편 (`GOOGLE_API_KEY`)** — 구글 AI 통신용 API 키를 기존 `GEMINI_API_KEY`에서 최신 규격인 `GOOGLE_API_KEY`로 통합 변경하고, 기본 탑재 모델을 `gemini-2.5-flash` 모델로 업그레이드.
 - **OpenRouter 연동 지원 추가** — `LLM_PROVIDER=openrouter` 환경 설정을 통해 다양한 오픈 소스 및 외부 LLM 모델을 활용할 수 있도록 OpenRouter 연동 모듈을 `lib/llmProvider.ts` 및 `lib/llmCompleteJson.ts`에 추가 탑재.
 - **전체 설정 및 가이드라인 일관화** — 신규 환경 변수와 LLM 제공자 구성을 `.env.example`, `README.md`, `.cursor/commands/run-dev.md`, `reference/tech_spec_sample.md` 등에 일괄 반영하여 개발 환경 설정의 혼선 방지.
+- **Vercel 서버리스 환경용 클라우드 PDF 변환 기능 추가** — Vercel 배포 시 `soffice(LibreOffice)` 실행 파일 부재로 인한 PDF 변환 제한을 완화하기 위해 `CLOUDMERSIVE_API_KEY` 연동 지원. 로컬 환경에서는 LibreOffice로 우선 변환하고, 배포 환경에서는 자동으로 Cloudmersive API(월 800회 무료 제공)로 우아한 대체(Fallback) 변환을 수행하도록 설계.
+- **tsconfig.json 최적화 및 paths 보정** — `tsconfig.json`에서 불필요해진 `baseUrl` 옵션을 제거하고, 절대경로 매핑(`paths`)을 상대경로 형식(`["./lib/*"]`)으로 최적화하여 빌드 무결성 보완.
 
 ## 1.6.0
 

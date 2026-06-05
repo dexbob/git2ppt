@@ -196,16 +196,16 @@ chmod +x start_server.sh   # 최초 1회
 | `SERVER_TIMEOUT_MS` | Express 소켓 타임아웃 (기본 `600000`) |
 | `SERVE_STATIC` | `1`이면 `dist/` 정적 UI + SPA fallback |
 
-### PDF (LibreOffice)
+### PDF (LibreOffice & Cloudmersive)
 
 | 변수 | 설명 |
 |------|------|
 | `SOFFICE_PATH` | `soffice` 경로 (비우면 `PATH` 검색) |
 | `LIBREOFFICE_TIMEOUT_MS` | 변환 타임아웃 (기본 `180000`) |
 | `SKIP_PDF` | `1`이면 PDF 생략 (PPTX만) |
-| `ENABLE_PDF_ON_VERCEL` | `1`일 때만 Vercel에서 PDF 변환 **시도** (기본은 생략) |
+| `CLOUDMERSIVE_API_KEY` | [Cloudmersive API Key](https://cloudmersive.com/) — Vercel 등 LibreOffice가 설치되지 않은 환경에서 사용하는 고성능 PDF 변환 백업 API 키 (비우면 비활성) |
 
-로컬 Express에서 변환 실패 시 콘솔: `[git2ppt] LibreOffice PDF 변환 실패`.
+로컬 Express에서 변환 실패 시 콘솔: `[git2ppt] LibreOffice PDF 변환 실패`. LibreOffice가 없거나 변환에 실패한 경우 `CLOUDMERSIVE_API_KEY`가 있으면 자동으로 Cloudmersive API 변환을 시도합니다.
 
 #### Ubuntu / Debian / WSL
 
@@ -227,10 +227,8 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
 2. 환경 변수: `GOOGLE_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
 3. 저장소 분석 수집은 GitHub API(Tree+blob)를 우선 시도하며, 로컬에서는 실패 시 git clone 및 ZIP 다운로드로 자동 Cascade 복구 수행 (Vercel에서는 ZIP 다운로드로 복구)
-4. LibreOffice 없음 → **PDF 기본 비활성** (`pdfAvailable: false`, `pdfNote`로 안내). PPTX·마크다운은 동일
+4. **Vercel PDF 변환 지원**: Vercel 등 서버리스 환경에서는 기본적으로 LibreOffice가 없으므로 PDF 변환이 불가하지만, 환경 변수에 `CLOUDMERSIVE_API_KEY`를 추가하면 Cloudmersive API를 통해 Vercel 배포 환경에서도 안전하고 높은 품질로 PDF 변환 및 다운로드를 지원합니다. (키가 없거나 실패 시에는 기존처럼 PPTX만 변환 완료 처리됩니다)
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
-
-실험적 PDF: `ENABLE_PDF_ON_VERCEL=1` (실패·타임아웃 가능). 끄기: `SKIP_PDF=1`.
 
 ---
 
