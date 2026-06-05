@@ -27,6 +27,9 @@ function describePdfFailure(err: unknown): string {
       if (hasCloudmersiveKey) {
         return 'PDF 변환에 실패했습니다. LibreOffice가 서버에 존재하지 않고, Cloudmersive API 변환 중 오류(일일 한도 초과 등)가 발생했습니다.';
       }
+      if (process.env.VERCEL === '1') {
+        return 'Vercel 서버리스에는 LibreOffice가 기본 탑재되어 있지 않아 PDF 변환에 실패했습니다. Cloudmersive API Key를 발급받아 CLOUDMERSIVE_API_KEY 환경변수에 설정하시면 Vercel에서도 클라우드 변환을 통해 PDF를 생성할 수 있습니다.';
+      }
       return 'PDF로 변환하지 못했습니다. soffice(LibreOffice) 실행 파일을 찾을 수 없습니다. 설치 후 필요하면 SOFFICE_PATH를 설정하세요.';
     }
     if ((err as { killed?: boolean }).killed) {

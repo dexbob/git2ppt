@@ -1,7 +1,7 @@
 export type PdfOutcome = 'available' | 'conversion_failed' | 'unavailable';
 
 const PDF_UNAVAILABLE_FALLBACK =
-  'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev` 또는 `./start_server.sh`)로 실행하거나, 환경 변수 ENABLE_PDF_ON_VERCEL을 확인하세요.';
+  'PDF가 포함되지 않았습니다. Vercel 기본 배포에서는 LibreOffice가 없어 PDF를 만들지 않고 PPTX만 주는 경우가 많습니다. 로컬(`npm run dev` 또는 `./start_server.sh`)로 실행하거나, Cloudmersive API Key를 발급받아 환경 변수에 설정하세요.';
 
 export function resolvePdfOutcome(
   pdfAvailable: boolean,

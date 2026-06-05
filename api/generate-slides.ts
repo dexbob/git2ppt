@@ -10,7 +10,6 @@ import { coverTagsFromSignals } from '../lib/coverTags.js';
 import type { DetectedSignals } from '../lib/types.js';
 import { convertPptxBufferToPdf } from '../lib/pdfConvert.js';
 import { bufferToBase64 } from '../lib/exportZip.js';
-import { buildPdfSkippedNote } from '../lib/pdfStatusNote.js';
 import { formatUserFacingError } from '../lib/formatUserFacingError.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -69,27 +68,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await cleanupDynamicCoverPath(coverBg);
     }
 
-    const skipPdf =
-      process.env.SKIP_PDF === '1' || (process.env.VERCEL === '1' && process.env.ENABLE_PDF_ON_VERCEL !== '1');
-    let pdfBuffer: Buffer | null = null;
-    let pdfError: string | null = null;
-    let pdfNote: string | null = null;
-    if (!skipPdf) {
-      const conv = await convertPptxBufferToPdf(pptxBuffer);
-      pdfBuffer = conv.pdf;
-      pdfError = conv.error;
-    } else {
-      const note = buildPdfSkippedNote();
-      pdfNote = note || null;
-    }
+    const conv = await convertPptxBufferToPdf(pptxBuffer);
 
     res.status(200).json({
       slideDeck,
       pptxBase64: bufferToBase64(pptxBuffer),
-      pdfBase64: pdfBuffer ? bufferToBase64(pdfBuffer) : null,
-      pdfAvailable: Boolean(pdfBuffer),
-      pdfError,
-      pdfNote,
+      pdfBase64: conv.pdf ? bufferToBase64(conv.pdf) : null,
+      pdfAvailable: Boolean(conv.pdf),
+      pdfError: conv.error,
     });
   } catch (err) {
     const message = formatUserFacingError(err, '슬라이드 생성에 실패했습니다.');

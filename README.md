@@ -44,7 +44,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 - **문서 미리보기** (`DocumentPreview`) — **README** / **기술명세서** / **슬라이드 프리뷰** 탭, 본문 높이 고정. README는 복제 직후 원문 → 번역 중 원문+배너 → 번역 완료 시 한국어. 각 산출물 준비 시 해당 탭으로 자동 이동.
 - **슬라이드 프리뷰** — `SlideDeckViewer`로 슬라이드 단위 미리보기.
 - 개별 다운로드: `README.md`(한국어 번역본), `tech_spec.md`, `slides.pptx`, `slides.pdf`(가능 시), **ZIP 일괄** (`presentation-bundle.zip`)
-- PDF 미제공·변환 실패 시 진행 카드·다운로드 섹션에 `pdfNote` / `pdfError` 안내
+- PDF 미제공·변환 실패 시 진행 카드·다운로드 섹션에 `pdfError` 안내
 - 실패 시 오류 문구와 함께 해당 실패 지점(예: "README 번역부터")부터 즉시 이어서 실행할 수 있는 지능형 재시도 UI 제공
 
 ### 생성물
@@ -227,7 +227,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
 2. 환경 변수: `GOOGLE_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
 3. 저장소 분석 수집은 GitHub API(Tree+blob)를 우선 시도하며, 로컬에서는 실패 시 git clone 및 ZIP 다운로드로 자동 Cascade 복구 수행 (Vercel에서는 ZIP 다운로드로 복구)
-4. **Vercel PDF 변환 지원**: Vercel 등 서버리스 환경에서는 기본적으로 LibreOffice가 없으므로 PDF 변환이 불가하지만, 환경 변수에 `CLOUDMERSIVE_API_KEY`를 추가하면 Cloudmersive API를 통해 Vercel 배포 환경에서도 안전하고 높은 품질로 PDF 변환 및 다운로드를 지원합니다. (키가 없거나 실패 시에는 기존처럼 PPTX만 변환 완료 처리됩니다)
+4. **Vercel PDF 변환 지원**: Vercel 등 서버리스 환경에서는 기본적으로 LibreOffice가 없으므로 PDF 변환이 불가하지만, 환경 변수에 `CLOUDMERSIVE_API_KEY`를 추가하면 Cloudmersive API를 통해 Vercel 배포 환경에서도 안전하고 높은 품질로 PDF 변환 및 다운로드를 지원합니다. (키가 없거나 실패 시에는 사용자에게 친절한 가이드라인 에러와 함께 PPTX 파일만 다운로드 가능하도록 완료 처리됩니다)
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
 
 ---
@@ -241,7 +241,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 | `POST /api/analyze-repo` | `{ "url": "https://github.com/owner/repo" }` | 성공: `{ "metadata" }` / 실패: `{ "error": "에러 메시지" }` |
 | `POST /api/translate-readme` | `{ "sourceMarkdown": "..." }` | `{ "readmeMarkdown" }` — 한국어 전체 번역(마크다운 본문만) |
 | `POST /api/generate-spec` | `{ "metadata": { ... } }` | `{ "techSpecMarkdown" }` |
-| `POST /api/generate-slides` | `{ "techSpecMarkdown", "repoUrl", "readmeMarkdown"?`, `ownerDisplayName?`, `detected?`, `githubTopics?` }` | `{ "slideDeck", "pptxBase64", "pdfBase64", "pdfAvailable", "pdfError", "pdfNote" }` |
+| `POST /api/generate-slides` | `{ "techSpecMarkdown", "repoUrl", "readmeMarkdown"?`, `ownerDisplayName?`, `detected?`, `githubTopics?` }` | `{ "slideDeck", "pptxBase64", "pdfBase64", "pdfAvailable", "pdfError" }` |
 | `POST /api/export-files` | `{ "readmeMarkdown", "techSpecMarkdown", "pptxBase64", "pdfBase64"? }` | ZIP 바이너리 (`presentation-bundle.zip`) |
 
 프론트 파이프라인: [`src/store/pipelineStore.ts`](src/store/pipelineStore.ts) — `analyze-repo` → (README 있으면) `translate-readme` → `generate-spec` → `generate-slides` 순으로 자동 호출. 클라이언트에서 README 이미지 URL 보정(`resolveReadmeAssetUrls`).

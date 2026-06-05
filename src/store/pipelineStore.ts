@@ -318,7 +318,6 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfBase64: string | null;
         pdfAvailable: boolean;
         pdfError?: string | null;
-        pdfNote?: string | null;
       }>(
         '/api/generate-slides',
         {
@@ -338,7 +337,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfBase64: slidesRes.pdfBase64,
         pdfAvailable: slidesRes.pdfAvailable,
         pdfError: slidesRes.pdfError ?? null,
-        pdfNote: slidesRes.pdfNote ?? null,
+        pdfNote: null,
         step: 'done',
       });
     } catch (e) {
