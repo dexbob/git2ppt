@@ -10,7 +10,7 @@ export function createGeminiClient(): GoogleGenAI {
   if (!key) {
     throw new Error('GOOGLE_API_KEY가 설정되어 있지 않습니다. (Vertex AI express mode)');
   }
-  return new GoogleGenAI({ apiKey: key });
+  return new GoogleGenAI({ apiKey: key, vertexai: true });
 }
 
 export function resolveGeminiModel(): string {
