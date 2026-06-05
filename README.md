@@ -27,7 +27,7 @@ GitHub URL 하나로 저장소를 분석하고, AI가 기술명세서와 발표 
 3. **기술명세 생성** — 스캔 결과를 바탕으로 LLM이 **마크다운 기술명세**(`tech_spec.md` 성격)만 작성합니다. [`reference/instruction.md`](reference/instruction.md)가 비어 있지 않으면 추가 인스트럭션으로 사용합니다(`INSTRUCTION_FILE`로 경로 변경 가능).
 4. **발표용 슬라이드** — 기술명세와 **번역 README**(없으면 원문)를 입력으로 슬라이드 구조(JSON)를 만든 뒤 **PPTX**로 렌더링합니다. LibreOffice(`soffice`)가 있는 환경에서는 **PDF** 변환도 시도합니다.
 
-LLM은 **Gemini 또는 OpenAI**만 지원합니다(`LLM_PROVIDER=auto`일 때 `GEMINI_API_KEY`가 있으면 Gemini, 없으면 OpenAI).
+LLM은 **Gemini(Vertex express), OpenAI, OpenRouter**를 지원합니다(`LLM_PROVIDER=auto`일 때 `GOOGLE_API_KEY`가 있으면 Gemini, 없으면 OpenAI. OpenRouter는 `LLM_PROVIDER=openrouter`로 명시).
 
 ### 사용자 플로우
 
@@ -68,7 +68,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 | API (로컬) | Express — [`server/local.ts`](server/local.ts) |
 | API (배포) | Vercel Serverless — [`api/`](api/) |
 | 공유 로직 | [`lib/`](lib/) (`@lib` 별칭) |
-| LLM | `@google/generative-ai`, `openai` |
+| LLM | `@google/genai` (Vertex express), `openai` |
 | 문서·슬라이드 | PptxGenJS, LibreOffice(선택 PDF), `archiver`(ZIP) |
 | 저장소 수집 | `simple-git` (partial clone + sparse checkout, 토큰 fallback) |
 
@@ -97,7 +97,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 ## 요구 사항
 
 - **Node.js 20+**
-- LLM 키 **하나 이상**: [`GEMINI_API_KEY`](https://aistudio.google.com/apikey) 또는 [`OPENAI_API_KEY`](https://platform.openai.com/)
+- LLM 키 **하나 이상**: [`GOOGLE_API_KEY`](https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys) (Vertex express) 또는 [`OPENAI_API_KEY`](https://platform.openai.com/)
 - (선택) 비공개 저장소·API rate limit: `GITHUB_TOKEN`
 - (선택) PDF: LibreOffice `soffice` (+ Impress 권장, 한글은 CJK 폰트)
 
@@ -107,7 +107,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 
 ```bash
 cp .env.example .env.local
-# .env.local 에 GEMINI_API_KEY 또는 OPENAI_API_KEY 설정
+# .env.local 에 GOOGLE_API_KEY 또는 OPENAI_API_KEY 설정
 
 npm install
 npm run dev
@@ -171,13 +171,13 @@ chmod +x start_server.sh   # 최초 1회
 
 | 변수 | 설명 |
 |------|------|
-| `LLM_PROVIDER` | `auto`(기본) / `gemini` / `openai` |
-| `GEMINI_API_KEY` | Google AI Studio |
-| `GEMINI_MODEL` | 비우면 `gemini-1.5-flash` |
+| `LLM_PROVIDER` | `auto`(기본) / `gemini` / `openai` / `openrouter` |
+| `GOOGLE_API_KEY` | Vertex AI express mode API key |
+| `GEMINI_MODEL` | 비우면 `gemini-2.5-flash` |
 | `OPENAI_API_KEY` | OpenAI |
 | `OPENAI_MODEL` | 기본 `gpt-4o` |
-
-> `.env.example`의 `ANTHROPIC_API_KEY`는 현재 코드에서 **사용하지 않습니다**.
+| `OPENROUTER_API_KEY` | [OpenRouter](https://openrouter.ai/) (`LLM_PROVIDER=openrouter`) |
+| `OPENROUTER_MODEL` | OpenRouter 모델 ID (비우면 `openrouter/free`) |
 
 ### GitHub·분석
 
@@ -225,7 +225,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 ## Vercel 배포
 
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
-2. 환경 변수: `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
+2. 환경 변수: `GOOGLE_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
 3. 저장소 분석 수집은 GitHub API(Tree+blob)를 우선 시도하며, 로컬에서는 실패 시 git clone 및 ZIP 다운로드로 자동 Cascade 복구 수행 (Vercel에서는 ZIP 다운로드로 복구)
 4. LibreOffice 없음 → **PDF 기본 비활성** (`pdfAvailable: false`, `pdfNote`로 안내). PPTX·마크다운은 동일
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함

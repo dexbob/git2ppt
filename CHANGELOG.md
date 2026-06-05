@@ -2,6 +2,13 @@
 
 이 파일은 README의 버전별 변경 이력을 분리해 모아둔 문서입니다.
 
+## 1.7.0
+
+- **Gemini SDK 최신 전환 및 클라이언트 분리** — 기존 `@google/generative-ai` 패키지를 전면 폐기하고, 구글의 최신 공식 차세대 SDK인 `@google/genai` 패키지로 전환. 이를 위해 전용 클라이언트 통신 모듈(`lib/geminiClient.ts`)을 신설하고, Vertex AI express mode 연동을 지원하도록 구조 조정.
+- **환경 변수 체계 개편 (`GOOGLE_API_KEY`)** — 구글 AI 통신용 API 키를 기존 `GEMINI_API_KEY`에서 최신 규격인 `GOOGLE_API_KEY`로 통합 변경하고, 기본 탑재 모델을 `gemini-2.5-flash` 모델로 업그레이드.
+- **OpenRouter 연동 지원 추가** — `LLM_PROVIDER=openrouter` 환경 설정을 통해 다양한 오픈 소스 및 외부 LLM 모델을 활용할 수 있도록 OpenRouter 연동 모듈을 `lib/llmProvider.ts` 및 `lib/llmCompleteJson.ts`에 추가 탑재.
+- **전체 설정 및 가이드라인 일관화** — 신규 환경 변수와 LLM 제공자 구성을 `.env.example`, `README.md`, `.cursor/commands/run-dev.md`, `reference/tech_spec_sample.md` 등에 일괄 반영하여 개발 환경 설정의 혼선 방지.
+
 ## 1.6.0
 
 - **저장소 수집 기본 방식 개편 (GitHub API tree+blob)** — `git` 명령을 사용하지 않고 GitHub REST API(Tree) 및 Raw 파일 수집 방식을 기본 경로로 설정. 분석에 필요한 우선순위 파일과 텍스트 코드만 선별적으로 수집하여 대규모 저장소(예: 155MB+)도 평균 3초 안팎에 분석 완료 가능.

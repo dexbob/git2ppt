@@ -25,7 +25,7 @@ export function formatUserFacingError(err: unknown, fallback: string): string {
   if (/JSON 파싱|invalid json|unexpected token/i.test(raw)) {
     return `AI 응답 형식 오류로 결과를 만들지 못했습니다. ${RETRY_HINT} (반복되면 GEMINI_MODEL 변경을 고려해 보세요.)`;
   }
-  if (/GoogleGenerativeAI Error/i.test(raw)) {
+  if (/GoogleGenerativeAI Error|ApiError|@google\/genai/i.test(raw)) {
     if (/503|high demand/i.test(raw)) {
       return `Gemini 서비스가 일시적으로 바쁩니다. 1~2분 뒤에 ${RETRY_HINT}`;
     }

@@ -1,7 +1,7 @@
 {
   "name": "git2ppt",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"tsx watch server/local.ts\"",
@@ -13,7 +13,7 @@
     "cover-bg:templates": "python3 scripts/render_cover_bg.py --mode templates"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.8.0",
     "adm-zip": "^0.5.17",
     "archiver": "^7.0.1",
     "cors": "^2.8.5",
