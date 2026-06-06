@@ -855,11 +855,11 @@ export async function buildPptxBuffer(
   const coverBackgroundAltPath = options?.coverBackgroundAltPath ?? null;
   const bgDataA =
     coverBackgroundPath && existsSync(coverBackgroundPath)
-      ? `image/png;base64,${readFileSync(coverBackgroundPath).toString('base64')}`
+      ? `data:image/png;base64,${readFileSync(coverBackgroundPath).toString('base64')}`
       : null;
   const bgDataB =
     coverBackgroundAltPath && existsSync(coverBackgroundAltPath)
-      ? `image/png;base64,${readFileSync(coverBackgroundAltPath).toString('base64')}`
+      ? `data:image/png;base64,${readFileSync(coverBackgroundAltPath).toString('base64')}`
       : null;
 
   let idx = 0;
