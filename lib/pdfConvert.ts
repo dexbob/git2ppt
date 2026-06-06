@@ -3,7 +3,6 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import https from 'node:https';
 
 const execFileAsync = promisify(execFile);
 
@@ -82,62 +81,30 @@ async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
   }
   lastApiCallTime = Date.now();
 
-  return new Promise((resolve, reject) => {
-    // 1. 표준 멀티파트 바운더리 생성
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-    
-    // 2. 헤더 및 푸터 버퍼 조립 (컴파일러의 \r\n -> \n 자동 변환에 의한 데이터 깨짐 방지)
-    const CRLF = '\r\n';
-    const headerParts = [
-      `--${boundary}`,
-      `Content-Disposition: form-data; name="inputFile"; filename="slides.pptx"`,
-      `Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation`,
-      '', // 헤더와 바디 사이의 빈 줄
-    ];
-    
-    const header = Buffer.from(headerParts.join(CRLF));
-    const footer = Buffer.from(`${CRLF}--${boundary}--${CRLF}`);
-    
-    // 3. 전체 바디 버퍼를 하나로 병합
-    const bodyBuffer = Buffer.concat([header, pptxBuffer, footer]);
-
-    const options = {
-      method: 'POST',
-      hostname: 'api.cloudmersive.com',
-      path: '/convert/autodetect/to/pdf', // PPTX 포맷 특이성을 유연하게 소화하는 자동 감지 PDF 변환 엔드포인트 적용
-      headers: {
-        'Apikey': apiKey,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': bodyBuffer.length,
-      }
-    };
-
-    // 4. 로우레벨 https 요청 전송
-    const req = https.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      
-      res.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
-
-      res.on('end', () => {
-        const responseBuffer = Buffer.concat(chunks);
-        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(responseBuffer);
-        } else {
-          const errorText = responseBuffer.toString('utf8');
-          reject(new Error(`Cloudmersive API 변환 실패 (HTTP ${res.statusCode}): ${errorText}`));
-        }
-      });
-    });
-
-    req.on('error', (err) => {
-      reject(err);
-    });
-
-    req.write(bodyBuffer);
-    req.end();
+  const formData = new FormData();
+  // Native File in Node.js 20+
+  const file = new File([new Uint8Array(pptxBuffer)], 'slides.pptx', {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   });
+  formData.append('inputFile', file);
+
+  // 헤더 병합 시 Content-Type 자동 주입(바운더리 포함) 방해 현상을 완벽히 해결하기 위해 Headers 객체 사용
+  const headers = new Headers();
+  headers.append('Apikey', apiKey);
+
+  const response = await fetch('https://api.cloudmersive.com/convert/autodetect/to/pdf', {
+    method: 'POST',
+    headers: headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Cloudmersive API 변환 실패 (HTTP ${response.status}): ${errorText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 /**
