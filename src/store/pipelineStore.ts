@@ -67,6 +67,9 @@ const initial = {
 
 const busySteps: PipelineStep[] = ['analyzing', 'readme', 'spec', 'slides'];
 
+// 리액트의 중복 마운트 및 초고속 동시 중복 클릭/호출을 완벽히 차단하는 동적 뮤텍스 플래그
+let isPipelineRunning = false;
+
 async function postJsonWithRetry<T>(
   path: string,
   body: unknown,
@@ -244,9 +247,11 @@ export const usePipelineStore = create<State>((set, get) => ({
   reset: () => set({ ...initial }),
   runPipeline: async () => {
     const state = get();
-    if (busySteps.includes(state.step)) {
+    if (busySteps.includes(state.step) || isPipelineRunning) {
       return;
     }
+    isPipelineRunning = true;
+
     const trimmedUrl = state.repoUrl.trim();
     if (!trimmedUrl) return;
 
@@ -345,6 +350,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfRetriable: slidesRes.pdfRetriable ?? false,
         step: 'done',
       });
+      isPipelineRunning = false; // 파이프라인 정상 종료 시 락 해제
     } catch (e) {
       const failedStep = get().step;
       const workFailed =
@@ -364,6 +370,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         error,
         infoMessage: null,
       });
+      isPipelineRunning = false; // 에러 발생 시에도 락 해제하여 재개 가능하도록 처리
     }
   },
   retryPdf: async () => {

@@ -104,7 +104,7 @@ async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
     const options = {
       method: 'POST',
       hostname: 'api.cloudmersive.com',
-      path: '/convert/pptx/to/pdf',
+      path: '/convert/autodetect/to/pdf', // PPTX 포맷 특이성을 유연하게 소화하는 자동 감지 PDF 변환 엔드포인트 적용
       headers: {
         'Apikey': apiKey,
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
