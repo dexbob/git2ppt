@@ -69,11 +69,11 @@ async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
   }
 
   const formData = new FormData();
-  // Native Blob in Node.js 18+
-  const blob = new Blob([new Uint8Array(pptxBuffer)], {
+  // Native File in Node.js 20+
+  const file = new File([new Uint8Array(pptxBuffer)], 'slides.pptx', {
     type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   });
-  formData.append('inputFile', blob, 'slides.pptx');
+  formData.append('inputFile', file);
 
   const response = await fetch('https://api.cloudmersive.com/convert/pptx/to/pdf', {
     method: 'POST',
