@@ -1,7 +1,8 @@
 import { resolvePdfDetailMessage } from '@lib/pdfClientStatus';
-import { FileArchive, FileCode2, FileText, FileType, Presentation } from 'lucide-react';
+import { FileArchive, FileCode2, FileText, FileType, Presentation, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { downloadBase64File, downloadTextFile, downloadZipBundle } from '../utils/download';
+import { usePipelineStore } from '../store/pipelineStore';
 
 type Props = {
   readme: string | null;
@@ -24,10 +25,12 @@ export function ResultDownloadCard({
   pdfNote,
   zipEnabled,
 }: Props) {
+  const { pdfRetriable, retryPdf, step: storeStep } = usePipelineStore();
   const [zipLoading, setZipLoading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
 
   const canZip = Boolean(readme && techSpec && pptxBase64 && zipEnabled);
+  const isRetrying = storeStep === 'slides';
 
   const pdfDetailMessage = resolvePdfDetailMessage(pdfAvailable, pdfError, pdfNote);
   const hasResolvedPdfStatus =
@@ -132,6 +135,19 @@ export function ResultDownloadCard({
           </div>
         </button>
       </div>
+      {!pdfAvailable && pdfError && pdfRetriable && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={isRetrying}
+            onClick={() => void retryPdf()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-accent-cyan/60 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isRetrying && <Loader2 className="h-4 w-4 animate-spin text-accent-cyan" />}
+            PDF 변환 다시 시도
+          </button>
+        </div>
+      )}
       <button
         type="button"
         disabled={!canZip || zipLoading}

@@ -133,6 +133,7 @@ app.post('/api/generate-slides', async (req, res) => {
       pdfBase64: conv.pdf ? bufferToBase64(conv.pdf) : null,
       pdfAvailable: Boolean(conv.pdf),
       pdfError: conv.error,
+      pdfRetriable: conv.pdfRetriable ?? false,
     });
   } catch (err) {
     const message = formatUserFacingError(err, '슬라이드 생성에 실패했습니다.');

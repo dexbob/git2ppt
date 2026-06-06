@@ -46,6 +46,7 @@ GitHub URL 입력(Enter 가능) → Clone/스캔 → README(원문·번역) → 
 - 개별 다운로드: `README.md`(한국어 번역본), `tech_spec.md`, `slides.pptx`, `slides.pdf`(가능 시), **ZIP 일괄** (`presentation-bundle.zip`)
 - PDF 미제공·변환 실패 시 진행 카드·다운로드 섹션에 `pdfError` 안내
 - 실패 시 오류 문구와 함께 해당 실패 지점(예: "README 번역부터")부터 즉시 이어서 실행할 수 있는 지능형 재시도 UI 제공
+- **PDF 변환 독립적 재시도(Partial Retry)** — 무거운 저장소 스캔, 번역, 명세서 생성 등이 성공적으로 끝난 상태에서 마지막 PDF 변환 단계만 일시적(네트워크, 속도 제한 등)으로 실패한 경우, 전체 파이프라인 초기화 없이 실패한 **PDF 변환만 안전하게 단독 재시도**할 수 있는 똑똑한 원터치 복구 버튼을 알림 배너와 다운로드 카드 영역에 지원합니다. (API 인증 실패 등의 영구 오류일 때는 버튼을 숨깁니다)
 
 ### 생성물
 
@@ -227,7 +228,7 @@ soffice --headless --invisible --nologo --convert-to pdf --outdir . slides.pptx
 1. GitHub 저장소 연결 (예: `dexbob/git2ppt`)
 2. 환경 변수: `GOOGLE_API_KEY` 또는 `OPENAI_API_KEY` (비공개 repo·rate limit 완화에는 `GITHUB_TOKEN` 권장)
 3. 저장소 분석 수집은 GitHub API(Tree+blob)를 우선 시도하며, 로컬에서는 실패 시 git clone 및 ZIP 다운로드로 자동 Cascade 복구 수행 (Vercel에서는 ZIP 다운로드로 복구)
-4. **Vercel PDF 변환 지원**: Vercel 등 서버리스 환경에서는 기본적으로 LibreOffice가 없으므로 PDF 변환이 불가하지만, 환경 변수에 `CLOUDMERSIVE_API_KEY`를 추가하면 Cloudmersive API를 통해 Vercel 배포 환경에서도 안전하고 높은 품질로 PDF 변환 및 다운로드를 지원합니다. (키가 없거나 실패 시에는 사용자에게 친절한 가이드라인 에러와 함께 PPTX 파일만 다운로드 가능하도록 완료 처리됩니다)
+4. **Vercel PDF 변환 지원**: Vercel 등 서버리스 환경에서는 기본적으로 LibreOffice가 없으므로 PDF 변환이 불가하지만, 환경 변수에 `CLOUDMERSIVE_API_KEY`를 추가하면 Cloudmersive API를 통해 Vercel 배포 환경에서도 안전하고 높은 품질로 PDF 변환 및 다운로드를 지원합니다. 만약 API 한도 초과나 일시적인 지연 등의 오류로 실패할 경우, 전체 리셋 없이 오직 **PDF 변환만 즉시 단독 재시도(Partial Retry)**할 수 있는 복구 인터랙션을 제공합니다.
 5. [`vercel.json`](vercel.json): API 함수 `maxDuration` 60초, `lib`·`reference` 포함
 
 ---

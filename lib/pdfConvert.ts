@@ -8,7 +8,11 @@ const execFileAsync = promisify(execFile);
 
 const CONVERT_MS = Number(process.env.LIBREOFFICE_TIMEOUT_MS ?? 180_000);
 
-export type PptxToPdfResult = { pdf: Buffer | null; error: string | null };
+export type PptxToPdfResult = { 
+  pdf: Buffer | null; 
+  error: string | null; 
+  pdfRetriable?: boolean; 
+};
 
 function stderrFromExecError(err: unknown): string {
   if (!err || typeof err !== 'object') return '';
@@ -18,25 +22,41 @@ function stderrFromExecError(err: unknown): string {
   return '';
 }
 
-function describePdfFailure(err: unknown): string {
+function describePdfFailure(err: unknown): { error: string; retriable: boolean } {
   const hasCloudmersiveKey = Boolean(process.env.CLOUDMERSIVE_API_KEY?.trim());
   
   if (err && typeof err === 'object') {
     const code = (err as { code?: string }).code;
     if (code === 'ENOENT') {
       if (hasCloudmersiveKey) {
-        return 'PDF 변환에 실패했습니다. LibreOffice가 서버에 존재하지 않고, Cloudmersive API 변환 중 오류(일일 한도 초과 등)가 발생했습니다.';
+        return {
+          error: 'PDF 변환에 실패했습니다. LibreOffice가 서버에 존재하지 않고, Cloudmersive API 변환 중 오류(일일 한도 초과 등)가 발생했습니다.',
+          // API Key가 있으므로 API 한도 초과 등 일시적 문제일 가능성이 높아 재시도 가능
+          retriable: true
+        };
       }
       if (process.env.VERCEL === '1') {
-        return 'Vercel 서버리스에는 LibreOffice가 기본 탑재되어 있지 않아 PDF 변환에 실패했습니다. Cloudmersive API Key를 발급받아 CLOUDMERSIVE_API_KEY 환경변수에 설정하시면 Vercel에서도 클라우드 변환을 통해 PDF를 생성할 수 있습니다.';
+        return {
+          error: 'Vercel 서버리스에는 LibreOffice가 기본 탑재되어 있지 않아 PDF 변환에 실패했습니다. Cloudmersive API Key를 발급받아 CLOUDMERSIVE_API_KEY 환경변수에 설정하시면 Vercel에서도 클라우드 변환을 통해 PDF를 생성할 수 있습니다.',
+          retriable: false // 키도 없고 빌드 도구도 없으므로 재시도 불가능
+        };
       }
-      return 'PDF로 변환하지 못했습니다. soffice(LibreOffice) 실행 파일을 찾을 수 없습니다. 설치 후 필요하면 SOFFICE_PATH를 설정하세요.';
+      return {
+        error: 'PDF로 변환하지 못했습니다. soffice(LibreOffice) 실행 파일을 찾을 수 없습니다. 설치 후 필요하면 SOFFICE_PATH를 설정하세요.',
+        retriable: false // 설치가 필수적이므로 즉각적인 재시도는 불가능
+      };
     }
     if ((err as { killed?: boolean }).killed) {
-      return `PDF로 변환하지 못했습니다. 변환 시간이 ${Math.round(CONVERT_MS / 1000)}초를 넘겼습니다. LIBREOFFICE_TIMEOUT_MS를 늘리거나 문서 크기를 확인하세요.`;
+      return {
+        error: `PDF로 변환하지 못했습니다. 변환 시간이 ${Math.round(CONVERT_MS / 1000)}초를 넘겼습니다. LIBREOFFICE_TIMEOUT_MS를 늘리거나 문서 크기를 확인하세요.`,
+        retriable: true
+      };
     }
   }
-  return 'PDF로 변환하지 못했습니다. LibreOffice headless 변환에 실패했습니다. slides.pptx를 저장한 뒤 로컬에서 soffice로 변환할 수 있습니다.';
+  return {
+    error: 'PDF로 변환하지 못했습니다. LibreOffice headless 변환에 실패했습니다. slides.pptx를 저장한 뒤 로컬에서 soffice로 변환할 수 있습니다.',
+    retriable: true
+  };
 }
 
 /**
@@ -122,10 +142,16 @@ export async function convertPptxBufferToPdf(pptxBuffer: Buffer): Promise<PptxTo
         } catch (apiErr) {
           // eslint-disable-next-line no-console
           console.error('[git2ppt] Cloudmersive API 변환 실패:', apiErr);
+          const errorMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+          return {
+            pdf: null,
+            error: `Vercel에서 PDF 변환을 위해 Cloudmersive API를 호출했으나 실패했습니다: ${errorMsg}`,
+          };
         }
       }
 
-      return { pdf: null, error: describePdfFailure(err) };
+      const failDesc = describePdfFailure(err);
+      return { pdf: null, error: failDesc.error, pdfRetriable: failDesc.retriable };
     } finally {
       await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
     }
@@ -139,8 +165,15 @@ export async function convertPptxBufferToPdf(pptxBuffer: Buffer): Promise<PptxTo
       } catch (apiErr) {
         // eslint-disable-next-line no-console
         console.error('[git2ppt] Cloudmersive API 변환 실패:', apiErr);
+        const errorMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+        const isAuthError = /401|403|unauthorized|forbidden|invalid api key/i.test(errorMsg);
+        return {
+          pdf: null,
+          error: `임시 폴더 생성 실패 후 Cloudmersive API 변환을 시도했으나 실패했습니다: ${errorMsg}`,
+          pdfRetriable: !isAuthError,
+        };
       }
     }
-    return { pdf: null, error: '임시 폴더를 생성할 수 없어 PDF 변환에 실패했습니다.' };
+    return { pdf: null, error: '임시 폴더를 생성할 수 없어 PDF 변환에 실패했습니다.', pdfRetriable: false };
   }
 }

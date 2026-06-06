@@ -9,6 +9,7 @@
 - **OpenRouter 연동 지원 추가** — `LLM_PROVIDER=openrouter` 환경 설정을 통해 다양한 오픈 소스 및 외부 LLM 모델을 활용할 수 있도록 OpenRouter 연동 모듈을 `lib/llmProvider.ts` 및 `lib/llmCompleteJson.ts`에 추가 탑재.
 - **전체 설정 및 가이드라인 일관화** — 신규 환경 변수와 LLM 제공자 구성을 `.env.example`, `README.md`, `.cursor/commands/run-dev.md`, `reference/tech_spec_sample.md` 등에 일괄 반영하여 개발 환경 설정의 혼선 방지.
 - **Vercel 및 로컬 일치형 단일화 PDF 변환 구조 설계 (Cloudmersive)** — 기존 Vercel 전용의 제한적인 스킵 우회 로직(`ENABLE_PDF_ON_VERCEL`, `pdfStatusNote.ts` 등)을 전면 제거하고 단일 변환 흐름으로 최적화. 로컬이든 서버리스 배포 환경이든 관계없이 1차로 로컬 LibreOffice 변환을 시도하며, 부재 시 `CLOUDMERSIVE_API_KEY` 환경 변수를 식별해 클라우드 API(월 800회 무료 제공)를 통한 매끄러운 대체(Fallback) 변환을 일관성 있게 완수하도록 설계. 키가 없거나 실패할 경우에만 친절한 맞춤형 안내 메시지를 사용자에게 보여줍니다.
+- **PDF 변환 독립적 재시도(Partial Retry) 기능 도입** — 이전 단계들의 무거운 생성 작업(저장소 스캔, 번역, 기술명세, 슬라이드 레이아웃 생성 등)이 정상 완료된 상태에서 마지막 PDF 변환 단계만 일시적(Rate Limit, 타임아웃 등)으로 실패했을 경우, 처음부터 다시 실행하는 대신 **실패한 PDF 변환만 원터치로 부분 재시도(Partial Retry)**할 수 있는 기능을 스토어(Zustand) 및 UI(배너와 다운로드 섹션)에 구축. 변환이 불가능한 영구 오류(인증 실패, API Key 누락 등)일 때는 재시도 버튼을 지능적으로 차단하여 최선의 사용자 경험(UX) 확보.
 - **tsconfig.json 최적화 및 paths 보정** — `tsconfig.json`에서 불필요해진 `baseUrl` 옵션을 제거하고, 절대경로 매핑(`paths`)을 상대경로 형식(`["./lib/*"]`)으로 최적화하여 빌드 무결성 보완.
 
 ## 1.6.0

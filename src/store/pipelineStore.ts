@@ -37,10 +37,12 @@ type State = {
   pdfAvailable: boolean;
   pdfError: string | null;
   pdfNote: string | null;
+  pdfRetriable: boolean;
   slideDeck: SlideDeckSpec | null;
   setRepoUrl: (v: string) => void;
   reset: () => void;
   runPipeline: () => Promise<void>;
+  retryPdf: () => Promise<void>;
 };
 
 const initial = {
@@ -59,6 +61,7 @@ const initial = {
   pdfAvailable: false,
   pdfError: null as string | null,
   pdfNote: null as string | null,
+  pdfRetriable: false,
   slideDeck: null as SlideDeckSpec | null,
 };
 
@@ -318,6 +321,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfBase64: string | null;
         pdfAvailable: boolean;
         pdfError?: string | null;
+        pdfRetriable?: boolean;
       }>(
         '/api/generate-slides',
         {
@@ -338,6 +342,7 @@ export const usePipelineStore = create<State>((set, get) => ({
         pdfAvailable: slidesRes.pdfAvailable,
         pdfError: slidesRes.pdfError ?? null,
         pdfNote: null,
+        pdfRetriable: slidesRes.pdfRetriable ?? false,
         step: 'done',
       });
     } catch (e) {
@@ -358,6 +363,56 @@ export const usePipelineStore = create<State>((set, get) => ({
         failedStep: workFailed,
         error,
         infoMessage: null,
+      });
+    }
+  },
+  retryPdf: async () => {
+    const state = get();
+    if (state.step !== 'done' || state.pdfAvailable) return;
+
+    set({
+      step: 'slides',
+      pdfError: null,
+    });
+
+    try {
+      const slidesRes = await postJsonWithRetry<{
+        slideDeck: SlideDeckSpec;
+        pptxBase64: string;
+        pdfBase64: string | null;
+        pdfAvailable: boolean;
+        pdfError?: string | null;
+        pdfRetriable?: boolean;
+      }>(
+        '/api/generate-slides',
+        {
+          techSpecMarkdown: state.techSpecMarkdown!,
+          repoUrl: state.metadata!.repoUrl,
+          readmeMarkdown: state.readmeMarkdown ?? state.repoReadmeMarkdown,
+          ownerDisplayName: state.metadata!.ownerDisplayName,
+          detected: state.metadata!.detected,
+          githubTopics: state.metadata!.githubTopics,
+        },
+        'PDF 변환 재시도',
+        set,
+      );
+      set({
+        slideDeck: slidesRes.slideDeck,
+        pptxBase64: slidesRes.pptxBase64,
+        pdfBase64: slidesRes.pdfBase64,
+        pdfAvailable: slidesRes.pdfAvailable,
+        pdfError: slidesRes.pdfError ?? null,
+        pdfNote: null,
+        pdfRetriable: slidesRes.pdfRetriable ?? false,
+        step: 'done',
+      });
+    } catch (e) {
+      const base = formatUserFacingError(e, 'PDF 변환에 실패했습니다.');
+      set({
+        step: 'done',
+        pdfAvailable: false,
+        pdfError: base,
+        pdfRetriable: true,
       });
     }
   },

@@ -13,6 +13,7 @@ import {
   type PdfOutcome,
 } from '@lib/pdfClientStatus';
 import type { PipelineStep, PipelineWorkStep } from '../store/pipelineStore';
+import { usePipelineStore } from '../store/pipelineStore';
 
 type StepKey = 'analyzing' | 'readme' | 'spec' | 'slides-ppt' | 'slides-pdf';
 
@@ -161,12 +162,14 @@ export function AnalysisProgress({
   pdfError,
   pdfNote,
 }: Props) {
+  const { pdfRetriable, retryPdf, step: storeStep } = usePipelineStore();
   const active = pipelineActiveIndex(step);
   const readmeSkipped = !hasRepoReadme && active > 1;
   const pdfOutcome = resolvePdfOutcome(pdfAvailable, pdfError);
   const pdfSummary = resolvePdfSummaryMessage(pdfAvailable, pdfError, pdfNote);
   const pdfDetail = resolvePdfDetailMessage(pdfAvailable, pdfError, pdfNote);
   const showPdfBanner = step === 'done' && pdfOutcome !== 'available' && pdfSummary;
+  const isRetrying = storeStep === 'slides';
 
   return (
     <section className="w-full space-y-3">
@@ -216,6 +219,17 @@ export function AnalysisProgress({
           <p className="mt-1 text-amber-100/90">{pdfSummary}</p>
           {pdfDetail && pdfDetail !== pdfSummary && (
             <p className="mt-2 text-xs text-slate-400">자세한 안내는 아래 다운로드 섹션을 참고하세요.</p>
+          )}
+          {pdfOutcome === 'conversion_failed' && pdfRetriable && (
+            <button
+              type="button"
+              disabled={isRetrying}
+              onClick={() => void retryPdf()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isRetrying && <Loader2 className="h-3 w-3 animate-spin text-amber-300" />}
+              PDF 변환 재시도
+            </button>
           )}
         </motion.div>
       )}
