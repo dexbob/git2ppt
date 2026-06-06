@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import https from 'node:https';
 
 const execFileAsync = promisify(execFile);
 
@@ -68,28 +69,58 @@ async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
     throw new Error('CLOUDMERSIVE_API_KEY가 설정되어 있지 않습니다.');
   }
 
-  const formData = new FormData();
-  // Native File in Node.js 20+
-  const file = new File([new Uint8Array(pptxBuffer)], 'slides.pptx', {
-    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  return new Promise((resolve, reject) => {
+    // 1. 표준 멀티파트 바운더리 생성
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    
+    // 2. 헤더 및 푸터 버퍼 조립 (Cloudmersive 호환성 보장)
+    const header = Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="inputFile"; filename="slides.pptx"\r\n` +
+      `Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation\r\n\r\n`
+    );
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    
+    // 3. 전체 바디 버퍼를 하나로 병합
+    const bodyBuffer = Buffer.concat([header, pptxBuffer, footer]);
+
+    const options = {
+      method: 'POST',
+      hostname: 'api.cloudmersive.com',
+      path: '/convert/pptx/to/pdf',
+      headers: {
+        'Apikey': apiKey,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': bodyBuffer.length,
+      }
+    };
+
+    // 4. 로우레벨 https 요청 전송
+    const req = https.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      
+      res.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+
+      res.on('end', () => {
+        const responseBuffer = Buffer.concat(chunks);
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(responseBuffer);
+        } else {
+          const errorText = responseBuffer.toString('utf8');
+          reject(new Error(`Cloudmersive API 변환 실패 (HTTP ${res.statusCode}): ${errorText}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.write(bodyBuffer);
+    req.end();
   });
-  formData.append('inputFile', file);
-
-  const response = await fetch('https://api.cloudmersive.com/convert/pptx/to/pdf', {
-    method: 'POST',
-    headers: {
-      Apikey: apiKey,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`Cloudmersive API 변환 실패 (HTTP ${response.status}): ${errorText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 /**
