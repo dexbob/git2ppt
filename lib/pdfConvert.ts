@@ -60,6 +60,9 @@ function describePdfFailure(err: unknown): { error: string; retriable: boolean }
   };
 }
 
+// 무료 플랜의 초당 1회 호출 한도(Rate Limit)를 우회하기 위한 전역 호출 시각 관리 변수
+let lastApiCallTime = 0;
+
 /**
  * Converts PPTX Buffer to PDF Buffer using Cloudmersive Document Conversion API.
  */
@@ -69,17 +72,31 @@ async function convertViaCloudmersive(pptxBuffer: Buffer): Promise<Buffer> {
     throw new Error('CLOUDMERSIVE_API_KEY가 설정되어 있지 않습니다.');
   }
 
+  // 무료 플랜의 초당 1회 제한(1 request/second)을 완벽히 지키기 위한 안전 대기 로직
+  const now = Date.now();
+  const minInterval = 1200; // 안전하게 1.2초의 간격을 강제 보장
+  const elapsed = now - lastApiCallTime;
+  if (elapsed < minInterval) {
+    const delay = minInterval - elapsed;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  lastApiCallTime = Date.now();
+
   return new Promise((resolve, reject) => {
     // 1. 표준 멀티파트 바운더리 생성
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     
-    // 2. 헤더 및 푸터 버퍼 조립 (Cloudmersive 호환성 보장)
-    const header = Buffer.from(
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="inputFile"; filename="slides.pptx"\r\n` +
-      `Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation\r\n\r\n`
-    );
-    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    // 2. 헤더 및 푸터 버퍼 조립 (컴파일러의 \r\n -> \n 자동 변환에 의한 데이터 깨짐 방지)
+    const CRLF = '\r\n';
+    const headerParts = [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="inputFile"; filename="slides.pptx"`,
+      `Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation`,
+      '', // 헤더와 바디 사이의 빈 줄
+    ];
+    
+    const header = Buffer.from(headerParts.join(CRLF));
+    const footer = Buffer.from(`${CRLF}--${boundary}--${CRLF}`);
     
     // 3. 전체 바디 버퍼를 하나로 병합
     const bodyBuffer = Buffer.concat([header, pptxBuffer, footer]);
